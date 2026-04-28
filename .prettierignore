@@ -1,0 +1,9 @@
+dist/
+build/
+coverage/
+node_modules/
+*.min.js
+*.min.css
+public/
+*.lock
+CHANGELOG.md

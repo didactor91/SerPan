@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.turbo/
+.env
+*.log
+coverage/
+.atl/
+*.local
+.DS_Store
+/var/
+/opt/
+*.db
+data/
