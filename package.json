@@ -29,15 +29,15 @@
   "lint-staged": {
     "apps/api/src/**/*.{ts,tsx}": [
       "prettier --write",
-      "eslint --fix --max-warnings 0"
+      "pnpm --filter @serverctrl/api exec eslint src --max-warnings 0"
     ],
     "apps/web/src/**/*.{ts,tsx}": [
       "prettier --write",
-      "eslint --fix --max-warnings 0"
+      "pnpm --filter @serverctrl/web exec eslint src --max-warnings 0"
     ],
     "packages/shared/src/**/*.{ts,tsx}": [
       "prettier --write",
-      "eslint --fix --max-warnings 0"
+      "pnpm --filter @serverctrl/shared exec eslint src --max-warnings 0"
     ],
     "*.{js,jsx}": [
       "prettier --write",
