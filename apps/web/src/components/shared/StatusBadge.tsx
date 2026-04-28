@@ -19,10 +19,10 @@ export function StatusBadge({ status }: StatusBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${config?.classes ?? statusConfig.unknown.classes}`}
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${config.classes}`}
     >
       <span className="w-1.5 h-1.5 rounded-full mr-1.5 bg-current opacity-70" />
-      {config?.label ?? statusConfig.unknown.label}
+      {config.label}
     </span>
   );
 }

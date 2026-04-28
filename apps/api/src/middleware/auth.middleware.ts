@@ -11,7 +11,7 @@ declare global {
 }
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const token = req.cookies?.accessToken as string | undefined;
+  const token = req.cookies.accessToken as string | undefined;
 
   if (!token) {
     res.status(401).json({
@@ -40,7 +40,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 }
 
 export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
-  const token = req.cookies?.accessToken as string | undefined;
+  const token = req.cookies.accessToken as string | undefined;
 
   if (token) {
     try {

@@ -22,7 +22,6 @@ class Logger {
     return base;
   }
 
-  // eslint-disable-next-line no-console
   private log(level: LogLevel, message: string, context?: Record<string, unknown>): void {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),

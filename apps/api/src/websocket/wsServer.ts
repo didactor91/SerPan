@@ -30,7 +30,7 @@ export class WebSocketServer {
       wsLogger.info(`Client connected: ${socket.id}`);
 
       // Get token from auth handshake
-      const token = socket.handshake.auth?.token as string | undefined;
+      const token = socket.handshake.auth.token as string | undefined;
       if (token) {
         // Token validation would happen here
         // For now, we trust the REST auth
@@ -62,7 +62,7 @@ export class WebSocketServer {
 
         // If processName specified, start streaming that log
         if (subscription.processName) {
-          const logPath = `${process.env.HOME}/.pm2/logs/${subscription.processName}-out.log`;
+          const logPath = `${process.env.HOME ?? ''}/.pm2/logs/${subscription.processName}-out.log`;
           logStreamService.startStream({
             processName: subscription.processName,
             logPath,

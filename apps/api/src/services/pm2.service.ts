@@ -6,7 +6,7 @@ export class PM2Service {
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       pm2.connect((err) => {
-        if (err) {
+        if (err as Error | null) {
           reject(err);
           return;
         }
@@ -24,7 +24,7 @@ export class PM2Service {
 
     return new Promise((resolve, reject) => {
       pm2.list((err, list) => {
-        if (err) {
+        if (err as Error | null) {
           reject(err);
           return;
         }
@@ -49,7 +49,7 @@ export class PM2Service {
 
     return new Promise((resolve) => {
       pm2.describe(name, (err, [proc]) => {
-        if (err || !proc) {
+        if ((err as Error | null) || !proc) {
           resolve(null);
           return;
         }
@@ -72,7 +72,7 @@ export class PM2Service {
 
     return new Promise((resolve, reject) => {
       pm2.start(nameOrScript, (err) => {
-        if (err) reject(err);
+        if (err as Error | null) reject(err);
         else resolve();
       });
     });
@@ -83,7 +83,7 @@ export class PM2Service {
 
     return new Promise((resolve, reject) => {
       pm2.stop(name, (err) => {
-        if (err) reject(err);
+        if (err as Error | null) reject(err);
         else resolve();
       });
     });
@@ -94,7 +94,7 @@ export class PM2Service {
 
     return new Promise((resolve, reject) => {
       pm2.restart(name, (err) => {
-        if (err) reject(err);
+        if (err as Error | null) reject(err);
         else resolve();
       });
     });
@@ -105,7 +105,7 @@ export class PM2Service {
 
     return new Promise((resolve, reject) => {
       pm2.reload(name, (err) => {
-        if (err) reject(err);
+        if (err as Error | null) reject(err);
         else resolve();
       });
     });
@@ -122,7 +122,7 @@ export class PM2Service {
       const logs: string[] = [];
 
       pm2.launchBus((err) => {
-        if (err) {
+        if (err as Error | null) {
           reject(err);
           return;
         }

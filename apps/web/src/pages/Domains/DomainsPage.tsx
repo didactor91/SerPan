@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 interface Certificate {
   domain: string;
   issuer: string;
-  notAfter: string; // API returns notAfter, not expiryDate
+  notAfter: string;
   notBefore?: string;
   daysUntilExpiry: number;
 }
@@ -19,9 +19,9 @@ interface CertsResponse {
 }
 
 function getCertStatusColor(daysUntilExpiry: number): 'default' | 'secondary' | 'destructive' {
-  if (daysUntilExpiry > 30) return 'default'; // green
-  if (daysUntilExpiry >= 7) return 'secondary'; // yellow
-  return 'destructive'; // red
+  if (daysUntilExpiry > 30) return 'default';
+  if (daysUntilExpiry >= 7) return 'secondary';
+  return 'destructive';
 }
 
 function formatDate(dateStr: string): string {
@@ -32,20 +32,86 @@ function formatDate(dateStr: string): string {
   }
 }
 
+interface CertTableProps {
+  certificates: Certificate[];
+  searchFilter: string;
+}
+
+function CertTable({ certificates, searchFilter }: CertTableProps) {
+  const filteredCerts = searchFilter
+    ? certificates.filter((cert) => cert.domain.toLowerCase().includes(searchFilter.toLowerCase()))
+    : certificates;
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b bg-muted/50">
+              <th className="text-left p-3 font-medium">Domain</th>
+              <th className="text-left p-3 font-medium">Issuer</th>
+              <th className="text-center p-3 font-medium">TLS Status</th>
+              <th className="text-right p-3 font-medium">Expiry</th>
+              <th className="text-right p-3 font-medium">Days Left</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredCerts.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                  {searchFilter ? 'No domains match your filter' : 'No domains configured'}
+                </td>
+              </tr>
+            ) : (
+              filteredCerts.map((cert, index) => (
+                <tr key={index} className="border-b">
+                  <td className="p-3 font-medium">{cert.domain}</td>
+                  <td className="p-3 text-muted-foreground">{cert.issuer}</td>
+                  <td className="p-3 text-center">
+                    <Badge variant={getCertStatusColor(cert.daysUntilExpiry)}>
+                      {cert.daysUntilExpiry > 30
+                        ? 'Valid'
+                        : cert.daysUntilExpiry >= 7
+                          ? 'Expiring Soon'
+                          : 'Expired'}
+                    </Badge>
+                  </td>
+                  <td className="p-3 text-right text-muted-foreground">
+                    {formatDate(cert.notAfter)}
+                  </td>
+                  <td className="p-3 text-right">
+                    <span
+                      className={
+                        cert.daysUntilExpiry < 7
+                          ? 'text-destructive font-medium'
+                          : cert.daysUntilExpiry < 30
+                            ? 'text-yellow-500'
+                            : 'text-muted-foreground'
+                      }
+                    >
+                      {cert.daysUntilExpiry}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function DomainsPage() {
   const [searchFilter, setSearchFilter] = useState('');
 
   const { data, isLoading, error } = useQuery<CertsResponse>({
     queryKey: ['proxy-certs'],
     queryFn: () => apiClient.get('/proxy/certs'),
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 60000,
   });
 
-  const certificates = data?.data?.certificates ?? [];
-
-  const filteredCerts = searchFilter
-    ? certificates.filter((cert) => cert.domain.toLowerCase().includes(searchFilter.toLowerCase()))
-    : certificates;
+  const certificates = data?.data.certificates ?? [];
 
   if (isLoading) {
     return (
@@ -78,62 +144,7 @@ export function DomainsPage() {
         />
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left p-3 font-medium">Domain</th>
-                <th className="text-left p-3 font-medium">Issuer</th>
-                <th className="text-center p-3 font-medium">TLS Status</th>
-                <th className="text-right p-3 font-medium">Expiry</th>
-                <th className="text-right p-3 font-medium">Days Left</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredCerts.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-6 text-center text-muted-foreground">
-                    {searchFilter ? 'No domains match your filter' : 'No domains configured'}
-                  </td>
-                </tr>
-              ) : (
-                filteredCerts.map((cert, index) => (
-                  <tr key={index} className="border-b">
-                    <td className="p-3 font-medium">{cert.domain}</td>
-                    <td className="p-3 text-muted-foreground">{cert.issuer}</td>
-                    <td className="p-3 text-center">
-                      <Badge variant={getCertStatusColor(cert.daysUntilExpiry)}>
-                        {cert.daysUntilExpiry > 30
-                          ? 'Valid'
-                          : cert.daysUntilExpiry >= 7
-                            ? 'Expiring Soon'
-                            : 'Expired'}
-                      </Badge>
-                    </td>
-                    <td className="p-3 text-right text-muted-foreground">
-                      {formatDate(cert.notAfter)}
-                    </td>
-                    <td className="p-3 text-right">
-                      <span
-                        className={
-                          cert.daysUntilExpiry < 7
-                            ? 'text-destructive font-medium'
-                            : cert.daysUntilExpiry < 30
-                              ? 'text-yellow-500'
-                              : 'text-muted-foreground'
-                        }
-                      >
-                        {cert.daysUntilExpiry}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <CertTable certificates={certificates} searchFilter={searchFilter} />
     </div>
   );
 }

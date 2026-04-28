@@ -27,7 +27,7 @@ export function DashboardPage() {
     refetchInterval: 5000, // Refresh every 5s
   });
 
-  const processes = processesData?.data?.processes ?? [];
+  const processes = processesData?.data.processes ?? [];
 
   if (isLoading) {
     return (

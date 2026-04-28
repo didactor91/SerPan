@@ -17,7 +17,7 @@ router.get('/:processName', async (req: Request, res: Response) => {
   const lines = parseInt(req.query.lines as string) || 100;
 
   // Get recent lines from PM2 log file
-  const logPath = `${process.env.HOME}/.pm2/logs/${processName}-out.log`;
+  const logPath = `${process.env.HOME ?? ''}/.pm2/logs/${processName}-out.log`;
 
   try {
     const stream = createReadStream(logPath, { encoding: 'utf8' });
@@ -39,10 +39,10 @@ router.get('/:processName', async (req: Request, res: Response) => {
 // GET /logs/:processName/download
 router.get('/:processName/download', async (req: Request, res: Response) => {
   const { processName } = req.params;
-  const logPath = `${process.env.HOME}/.pm2/logs/${processName}-out.log`;
+  const logPath = `${process.env.HOME ?? ''}/.pm2/logs/${processName ?? ''}-out.log`;
 
   res.setHeader('Content-Type', 'text/plain');
-  res.setHeader('Content-Disposition', `attachment; filename="${processName}.log"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${processName ?? 'download'}.log"`);
 
   const stream = createReadStream(logPath);
   stream.pipe(res);

@@ -15,14 +15,14 @@ export function ProjectCard({ name, domain, process }: ProjectCardProps) {
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
 
-    if (days > 0) return `${days}d ${hours % 24}h`;
-    if (hours > 0) return `${hours}h ${minutes % 60}m`;
-    return `${minutes}m`;
+    if (days > 0) return String(days) + 'd ' + String(hours % 24) + 'h';
+    if (hours > 0) return String(hours) + 'h ' + String(minutes % 60) + 'm';
+    return String(minutes) + 'm';
   };
 
   const formatMemory = (bytes: number): string => {
     const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(0)}MB`;
+    return mb.toFixed(0) + 'MB';
   };
 
   return (

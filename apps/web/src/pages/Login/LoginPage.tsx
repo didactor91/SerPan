@@ -22,7 +22,7 @@ export function LoginPage() {
     try {
       await login(username, password);
       add({ type: 'success', message: 'Logged in successfully' });
-      navigate({ to: '/dashboard' });
+      await navigate({ to: '/dashboard' });
     } catch (error) {
       add({ type: 'error', message: error instanceof Error ? error.message : 'Login failed' });
     } finally {
@@ -37,7 +37,13 @@ export function LoginPage() {
           <CardTitle>ServerCtrl Login</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleSubmit(e);
+            }}
+            className="space-y-4"
+          >
             <div>
               <Label htmlFor="username" required>
                 Username

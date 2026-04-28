@@ -141,17 +141,19 @@ router.get('/domains', async (_req: Request, res: Response) => {
 
   const domains = routes
     .map((route) => {
-      const hostname = route.match?.[0]?.host?.[0];
+      const match = route.match[0];
+      if (!match) return null;
+      const hostname = typeof match.host !== 'undefined' ? match.host[0] : undefined;
       if (!hostname) return null;
 
-      const upstream = route.handle?.find((h) => h.handler === 'reverse_proxy')?.upstreams?.[0]
-        ?.dial;
-      const hasTLS = route.handle?.some((h) => h.handler === 'tls');
+      const reverseProxy = route.handle.find((h) => h.handler === 'reverse_proxy');
+      const upstream = reverseProxy?.upstreams?.[0]?.dial ?? null;
+      const hasTLS = route.handle.some((h) => h.handler === 'tls');
 
       return {
         domain: hostname,
-        upstream: upstream ?? null,
-        tls: hasTLS ?? false,
+        upstream,
+        tls: hasTLS,
         routeId: route['@id'],
       };
     })

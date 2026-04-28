@@ -76,7 +76,7 @@ export class LogStreamService extends EventEmitter {
       stream.on('data', (data) => {
         const content = typeof data === 'string' ? data : Buffer.from(data).toString('utf8');
         const lines = content.split('\n').filter((l: string) => l.trim());
-        const buffer = this.buffers.get(processName) || [];
+        const buffer = this.buffers.get(processName) ?? [];
 
         for (const line of lines) {
           const parsed = this.parseLine(line, processName);
@@ -120,7 +120,7 @@ export class LogStreamService extends EventEmitter {
   }
 
   getBuffer(processName: string): LogLine[] {
-    return this.buffers.get(processName) || [];
+    return this.buffers.get(processName) ?? [];
   }
 
   clearBuffer(processName: string): void {

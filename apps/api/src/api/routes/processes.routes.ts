@@ -83,7 +83,7 @@ router.post('/:name/scale', async (req: Request, res: Response) => {
   }
 
   await pm2Service.scale(name, instances);
-  res.json({ data: { message: `Process ${name} scaled to ${instances} instances` } });
+  res.json({ data: { message: `Process ${name} scaled to ${String(instances)} instances` } });
 });
 
 // GET /processes/:name/logs

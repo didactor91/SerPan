@@ -24,6 +24,126 @@ interface ProcessListResponse {
 
 type LogLevel = 'all' | 'info' | 'warn' | 'error';
 
+interface LogControlsProps {
+  processes: PM2Process[];
+  selectedProcess: string;
+  logLevel: LogLevel;
+  searchFilter: string;
+  isPaused: boolean;
+  filteredLogsLength: number;
+  onProcessChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  onLevelChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  onSearchChange: (value: string) => void;
+  onTogglePause: () => void;
+  onClear: () => void;
+  onDownload: () => void;
+}
+
+interface LogViewerCardProps {
+  lines: string[];
+  isPaused: boolean;
+  selectedProcess: string;
+}
+
+function LogViewerCard({ lines, isPaused, selectedProcess }: LogViewerCardProps) {
+  return (
+    <Card className="flex-1">
+      <CardContent className="p-0 h-full">
+        {selectedProcess ? (
+          <div className="h-full">
+            <LogViewer lines={lines} autoScroll={!isPaused} />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            Select a process to view logs
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LogControls({
+  processes,
+  selectedProcess,
+  logLevel,
+  searchFilter,
+  isPaused,
+  filteredLogsLength,
+  onProcessChange,
+  onLevelChange,
+  onSearchChange,
+  onTogglePause,
+  onClear,
+  onDownload,
+}: LogControlsProps) {
+  return (
+    <Card className="mb-4">
+      <CardContent className="p-4">
+        <div className="flex flex-wrap gap-4 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">Process</label>
+            <select
+              value={selectedProcess}
+              onChange={onProcessChange}
+              className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+            >
+              <option value="">Select a process</option>
+              {processes.map((proc) => (
+                <option key={proc.name} value={proc.name}>
+                  {proc.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">Log Level</label>
+            <select
+              value={logLevel}
+              onChange={onLevelChange}
+              className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+            >
+              <option value="all">All</option>
+              <option value="info">Info</option>
+              <option value="warn">Warning</option>
+              <option value="error">Error</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1 flex-1">
+            <label className="text-sm font-medium">Search</label>
+            <input
+              type="text"
+              value={searchFilter}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Filter logs..."
+              className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onTogglePause} disabled={!selectedProcess}>
+              {isPaused ? 'Resume' : 'Pause'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={onClear} disabled={!selectedProcess}>
+              Clear
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDownload}
+              disabled={filteredLogsLength === 0}
+            >
+              Download
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function LogViewerPage() {
   const [selectedProcess, setSelectedProcess] = useState<string>('');
   const [logLevel, setLogLevel] = useState<LogLevel>('all');
@@ -35,12 +155,12 @@ export function LogViewerPage() {
     queryFn: () => apiClient.get('/processes'),
   });
 
-  const processes = processesData?.data?.processes ?? [];
+  const processes = processesData?.data.processes ?? [];
 
   const { logs, isStreaming, pause, resume, clear } = useLogStream({
     processName: selectedProcess,
     level: logLevel === 'all' ? undefined : logLevel,
-    enabled: !!selectedProcess && !isPaused,
+    enabled: selectedProcess !== '' && !isPaused,
   });
 
   const filteredLogs = searchFilter
@@ -74,7 +194,7 @@ export function LogViewerPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${selectedProcess || 'logs'}-${new Date().toISOString()}.log`;
+    a.download = (selectedProcess || 'logs') + '-' + new Date().toISOString() + '.log';
     a.click();
     URL.revokeObjectURL(url);
   }, [filteredLogs, selectedProcess]);
@@ -94,94 +214,22 @@ export function LogViewerPage() {
         </div>
       </div>
 
-      {/* Controls */}
-      <Card className="mb-4">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4 items-end">
-            {/* Process Selector */}
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">Process</label>
-              <select
-                value={selectedProcess}
-                onChange={handleProcessChange}
-                className="h-10 px-3 rounded-md border border-input bg-background text-sm"
-              >
-                <option value="">Select a process</option>
-                {processes.map((proc) => (
-                  <option key={proc.name} value={proc.name}>
-                    {proc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+      <LogControls
+        processes={processes}
+        selectedProcess={selectedProcess}
+        logLevel={logLevel}
+        searchFilter={searchFilter}
+        isPaused={isPaused}
+        filteredLogsLength={filteredLogs.length}
+        onProcessChange={handleProcessChange}
+        onLevelChange={handleLevelChange}
+        onSearchChange={setSearchFilter}
+        onTogglePause={handleTogglePause}
+        onClear={handleClear}
+        onDownload={handleDownload}
+      />
 
-            {/* Log Level Filter */}
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">Log Level</label>
-              <select
-                value={logLevel}
-                onChange={handleLevelChange}
-                className="h-10 px-3 rounded-md border border-input bg-background text-sm"
-              >
-                <option value="all">All</option>
-                <option value="info">Info</option>
-                <option value="warn">Warning</option>
-                <option value="error">Error</option>
-              </select>
-            </div>
-
-            {/* Search */}
-            <div className="flex flex-col gap-1 flex-1">
-              <label className="text-sm font-medium">Search</label>
-              <input
-                type="text"
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                placeholder="Filter logs..."
-                className="h-10 px-3 rounded-md border border-input bg-background text-sm"
-              />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTogglePause}
-                disabled={!selectedProcess}
-              >
-                {isPaused ? 'Resume' : 'Pause'}
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleClear} disabled={!selectedProcess}>
-                Clear
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDownload}
-                disabled={filteredLogs.length === 0}
-              >
-                Download
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Log Viewer */}
-      <Card className="flex-1">
-        <CardContent className="p-0 h-full">
-          {selectedProcess ? (
-            <div className="h-full">
-              <LogViewer lines={filteredLogs} autoScroll={!isPaused} />
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              Select a process to view logs
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <LogViewerCard lines={filteredLogs} isPaused={isPaused} selectedProcess={selectedProcess} />
     </div>
   );
 }

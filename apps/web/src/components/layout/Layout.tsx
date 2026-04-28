@@ -127,9 +127,10 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogout = async () => {
-    await logout();
-    navigate({ to: '/login' });
+  const handleLogout = () => {
+    void logout().then(() => {
+      void navigate({ to: '/login' });
+    });
   };
 
   return (

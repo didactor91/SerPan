@@ -7,11 +7,12 @@ export function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    checkAuth().then((isAuthenticated) => {
+    void checkAuth().then((isAuthenticated) => {
       if (!isAuthenticated) {
-        navigate({ to: '/login' });
+        void navigate({ to: '/login' });
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return null; // Router handles rendering

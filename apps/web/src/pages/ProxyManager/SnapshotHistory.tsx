@@ -70,6 +70,98 @@ function DiffView({ oldText, newText }: { oldText: string; newText: string }) {
   );
 }
 
+interface SnapshotCardProps {
+  snapshot: Snapshot;
+  onViewDiff: (snapshot: Snapshot) => void;
+  onRollback: (id: string) => void;
+}
+
+function SnapshotCard({ snapshot, onViewDiff, onRollback }: SnapshotCardProps) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">{snapshot.description}</p>
+            <p className="text-sm text-muted-foreground">
+              {format(new Date(snapshot.createdAt), 'PPpp')}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => onViewDiff(snapshot)}>
+              View Diff
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => onRollback(snapshot.id)}>
+              Rollback
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface DiffModalProps {
+  snapshot: Snapshot | null;
+  currentConfig: string;
+  onClose: () => void;
+}
+
+function DiffModal({ snapshot, currentConfig, onClose }: DiffModalProps) {
+  if (!snapshot) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-background rounded-lg p-6 w-full max-w-3xl shadow-xl max-h-[80vh] overflow-auto">
+        <h2 className="text-lg font-semibold mb-4">Diff: {snapshot.description}</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Comparing snapshot (left) vs current config (right)
+        </p>
+        <DiffView oldText={snapshot.configSnapshot} newText={currentConfig} />
+        <div className="flex justify-end mt-4">
+          <Button onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface RollbackConfirmModalProps {
+  snapshotId: string | null;
+  isPending: boolean;
+  onConfirm: (id: string) => void;
+  onCancel: () => void;
+}
+
+function RollbackConfirmModal({
+  snapshotId,
+  isPending,
+  onConfirm,
+  onCancel,
+}: RollbackConfirmModalProps) {
+  if (!snapshotId) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-background rounded-lg p-6 w-full max-w-sm shadow-xl">
+        <h2 className="text-lg font-semibold mb-4">Confirm Rollback</h2>
+        <p className="text-muted-foreground mb-6">
+          This will restore the proxy configuration to the selected snapshot. A new snapshot will be
+          created before making changes.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={() => onConfirm(snapshotId)} disabled={isPending}>
+            Rollback
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface SnapshotHistoryProps {
   onBack: () => void;
 }
@@ -89,7 +181,7 @@ export function SnapshotHistory({ onBack }: SnapshotHistoryProps) {
   const rollbackMutation = useMutation({
     mutationFn: (id: string) => apiClient.post(`/proxy/rollback/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proxy-routes'] });
+      void queryClient.invalidateQueries({ queryKey: ['proxy-routes'] });
       setRollbackConfirm(null);
       add({ type: 'success', message: 'Rollback completed successfully' });
       onBack();
@@ -99,7 +191,8 @@ export function SnapshotHistory({ onBack }: SnapshotHistoryProps) {
     },
   });
 
-  const currentConfig = JSON.stringify(data?.data?.snapshots?.[0], null, 2) ?? '';
+  const snapshots = data?.data.snapshots ?? [];
+  const currentConfig = JSON.stringify(snapshots[0], null, 2);
 
   if (isLoading) {
     return (
@@ -119,8 +212,6 @@ export function SnapshotHistory({ onBack }: SnapshotHistoryProps) {
     );
   }
 
-  const snapshots = data?.data?.snapshots ?? [];
-
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -139,81 +230,31 @@ export function SnapshotHistory({ onBack }: SnapshotHistoryProps) {
       ) : (
         <div className="space-y-4">
           {snapshots.map((snapshot) => (
-            <Card key={snapshot.id}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{snapshot.description}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {format(new Date(snapshot.createdAt), 'PPpp')}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedSnapshot(snapshot);
-                        setShowDiff(true);
-                      }}
-                    >
-                      View Diff
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => setRollbackConfirm(snapshot.id)}
-                    >
-                      Rollback
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <SnapshotCard
+              key={snapshot.id}
+              snapshot={snapshot}
+              onViewDiff={(s) => {
+                setSelectedSnapshot(s);
+                setShowDiff(true);
+              }}
+              onRollback={(id) => setRollbackConfirm(id)}
+            />
           ))}
         </div>
       )}
 
-      {/* Diff Modal */}
-      {showDiff && selectedSnapshot && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-3xl shadow-xl max-h-[80vh] overflow-auto">
-            <h2 className="text-lg font-semibold mb-4">Diff: {selectedSnapshot.description}</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              Comparing snapshot (left) vs current config (right)
-            </p>
-            <DiffView oldText={selectedSnapshot.configSnapshot} newText={currentConfig} />
-            <div className="flex justify-end mt-4">
-              <Button onClick={() => setShowDiff(false)}>Close</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DiffModal
+        snapshot={showDiff ? selectedSnapshot : null}
+        currentConfig={currentConfig}
+        onClose={() => setShowDiff(false)}
+      />
 
-      {/* Rollback Confirmation */}
-      {rollbackConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-sm shadow-xl">
-            <h2 className="text-lg font-semibold mb-4">Confirm Rollback</h2>
-            <p className="text-muted-foreground mb-6">
-              This will restore the proxy configuration to the selected snapshot. A new snapshot
-              will be created before making changes.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setRollbackConfirm(null)}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => rollbackMutation.mutate(rollbackConfirm)}
-                disabled={rollbackMutation.isPending}
-              >
-                Rollback
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <RollbackConfirmModal
+        snapshotId={rollbackConfirm}
+        isPending={rollbackMutation.isPending}
+        onConfirm={(id) => rollbackMutation.mutate(id)}
+        onCancel={() => setRollbackConfirm(null)}
+      />
     </div>
   );
 }

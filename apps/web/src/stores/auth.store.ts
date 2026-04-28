@@ -1,6 +1,18 @@
 import { create } from 'zustand';
 import type { User } from '@serverctrl/shared';
 
+interface AuthResponse {
+  data: {
+    user: User;
+  };
+}
+
+interface ErrorResponse {
+  error?: {
+    message?: string;
+  };
+}
+
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
@@ -24,11 +36,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
 
     if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.error?.message || 'Login failed');
+      const error: ErrorResponse = (await res.json()) as ErrorResponse;
+      throw new Error(error.error?.message ?? 'Login failed');
     }
 
-    const data = await res.json();
+    const data: AuthResponse = (await res.json()) as AuthResponse;
     set({ user: data.data.user, isAuthenticated: true, isLoading: false });
   },
 
@@ -53,7 +65,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         return false;
       }
 
-      const data = await res.json();
+      const data: AuthResponse = (await res.json()) as AuthResponse;
       set({ user: data.data.user, isAuthenticated: true, isLoading: false });
       return true;
     } catch {

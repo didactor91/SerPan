@@ -81,7 +81,7 @@ export class CaddyService {
   async getRoutes(): Promise<CaddyRoute[]> {
     const config = await this.getConfig();
     const server = config.apps?.http?.servers?.srv0;
-    return server?.routes || [];
+    return server?.routes ?? [];
   }
 
   async addRoute(host: string, upstreamPort: number, tls = true): Promise<string> {
@@ -93,7 +93,7 @@ export class CaddyService {
       handle: [
         {
           handler: 'reverse_proxy',
-          upstreams: [{ dial: `localhost:${upstreamPort}` }],
+          upstreams: [{ dial: `localhost:${String(upstreamPort)}` }],
         },
       ],
       terminal: true,
@@ -213,7 +213,7 @@ export class CaddyService {
       .get(snapshotId) as { config: string } | undefined;
 
     if (!snapshot) {
-      throw new Error(`Snapshot ${snapshotId} not found`);
+      throw new Error(`Snapshot ${String(snapshotId)} not found`);
     }
 
     const res = await fetch(`${this.apiBase}/load`, {

@@ -32,8 +32,8 @@ const indexRoute = createRoute({
   component: function Index() {
     const navigate = useNavigate();
     React.useEffect(() => {
-      navigate({ to: '/dashboard' });
-    }, []);
+      void navigate({ to: '/dashboard' });
+    }, [navigate]);
     return null;
   },
 });

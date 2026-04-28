@@ -7,7 +7,7 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "lint:ci": "turbo run lint -- --max-warnings 999",
+    "lint:ci": "turbo run lint -- --max-warnings 0",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "prepare": "husky"
@@ -29,19 +29,19 @@
   "lint-staged": {
     "apps/api/src/**/*.{ts,tsx}": [
       "prettier --write",
-      "eslint --fix --max-warnings 999"
+      "eslint --fix --max-warnings 0"
     ],
     "apps/web/src/**/*.{ts,tsx}": [
       "prettier --write",
-      "eslint --fix --max-warnings 999"
+      "eslint --fix --max-warnings 0"
     ],
     "packages/shared/src/**/*.{ts,tsx}": [
       "prettier --write",
-      "eslint --fix --max-warnings 999"
+      "eslint --fix --max-warnings 0"
     ],
     "*.{js,jsx}": [
       "prettier --write",
-      "eslint --fix --max-warnings 999"
+      "eslint --fix --max-warnings 0"
     ],
     "*.{json,md,yml,yaml}": [
       "prettier --write"

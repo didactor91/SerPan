@@ -63,7 +63,7 @@ process.on('SIGINT', shutdown);
 // Start
 const port = env.PORT;
 httpServer.listen(port, () => {
-  apiLogger.info(`ServerCtrl API running on port ${port}`);
+  apiLogger.info(`ServerCtrl API running on port ${String(port)}`);
   apiLogger.info(`Environment: ${env.NODE_ENV}`);
 
   // Initialize database
