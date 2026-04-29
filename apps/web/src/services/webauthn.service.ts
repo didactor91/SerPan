@@ -14,8 +14,8 @@ export interface RegistrationOptionsResponse {
     displayName: string;
     id: string;
   };
-  pubKeyCredParams: Array<{ type: 'public-key'; alg: number }>;
-  excludeCredentials?: Array<{ id: string; type: 'public-key' }>;
+  pubKeyCredParams: { type: 'public-key'; alg: number }[];
+  excludeCredentials?: { id: string; type: 'public-key' }[];
   authenticatorSelection?: {
     authenticatorAttachment?: 'platform' | 'cross-platform';
     residentKey?: 'preferred' | 'required' | 'discouraged';
@@ -30,7 +30,7 @@ export interface AuthenticationOptionsResponse {
   timeout?: number;
   challenge: string;
   rpId: string;
-  allowCredentials?: Array<{ id: string; type: 'public-key' }>;
+  allowCredentials?: { id: string; type: 'public-key' }[];
   userVerification?: 'preferred' | 'required' | 'discouraged';
   extensions?: Record<string, unknown>;
 }

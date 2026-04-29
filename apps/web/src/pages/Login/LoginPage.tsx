@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@/stores/auth.store';
 import { useNotificationsStore } from '@/stores/notifications.store';
@@ -11,6 +11,15 @@ interface LoginPageProps {
   webAuthnSupported?: boolean;
 }
 
+async function checkWebAuthnSupport(): Promise<{ supported: boolean; available: boolean }> {
+  if (typeof window.PublicKeyCredential === 'undefined') {
+    return { supported: false, available: false };
+  }
+  const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  return { supported: true, available };
+}
+
+// eslint-disable-next-line max-lines-per-function
 export function LoginPage({ webAuthnSupported = true }: LoginPageProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -34,8 +43,7 @@ export function LoginPage({ webAuthnSupported = true }: LoginPageProps) {
     }
   };
 
-  const handlePasskeyLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePasskeyLogin = useCallback(async () => {
     if (!username.trim()) {
       add({ type: 'error', message: 'Please enter your username first' });
       return;
@@ -43,23 +51,14 @@ export function LoginPage({ webAuthnSupported = true }: LoginPageProps) {
 
     setIsLoading(true);
     try {
-      // First, get the user ID from the username
-      // We need to look up the user by username first
-      // Since the auth flow doesn't expose userId directly, we need a different approach
-      // The webauthn authentication options endpoint requires userId
-      // For passkey login, we typically use username as the identifier
-      // and the RP looks up the user
+      const { supported, available } = await checkWebAuthnSupport();
 
-      // For now, let's check if the browser supports WebAuthn
-      if (!window.PublicKeyCredential) {
+      if (!supported) {
         add({ type: 'error', message: 'WebAuthn is not supported in this browser' });
         return;
       }
 
-      // Check if WebAuthn is available
-      const isWebAuthnAvailable =
-        await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      if (!isWebAuthnAvailable) {
+      if (!available) {
         add({ type: 'error', message: 'Passkey login is not available on this device' });
         return;
       }
@@ -76,7 +75,7 @@ export function LoginPage({ webAuthnSupported = true }: LoginPageProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [username, add, setIsLoading]);
 
   return (
     <div className="flex h-screen items-center justify-center bg-background">
@@ -125,9 +124,7 @@ export function LoginPage({ webAuthnSupported = true }: LoginPageProps) {
                 type="button"
                 variant="secondary"
                 className="w-full"
-                onClick={(e) => {
-                  void handlePasskeyLogin(e);
-                }}
+                onClick={() => void handlePasskeyLogin()}
                 disabled={isLoading}
               >
                 {isLoading ? 'Please wait...' : 'Use Passkey'}

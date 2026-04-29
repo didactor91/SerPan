@@ -27,6 +27,7 @@ interface CreateProjectRequest {
   description?: string;
 }
 
+// eslint-disable-next-line max-lines-per-function, complexity
 export function ProjectsPage() {
   const queryClient = useQueryClient();
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -46,13 +47,15 @@ export function ProjectsPage() {
 
   const discoverMutation = useMutation<DiscoverResponse>({
     mutationFn: () => apiClient.get<DiscoverResponse>('/projects/discover'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
   });
 
   const createProjectMutation = useMutation({
     mutationFn: (project: CreateProjectRequest) => apiClient.post('/projects', project),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['projects'] });
       setShowCreateForm(false);
       setNewProject({ name: '', slug: '', type: 'pm2', path: '', domain: '', description: '' });
     },
@@ -155,7 +158,7 @@ export function ProjectsPage() {
               <div>
                 <label className="text-sm font-medium">Domain (optional)</label>
                 <Input
-                  value={newProject.domain || ''}
+                  value={newProject.domain ?? ''}
                   onChange={(e) => setNewProject((prev) => ({ ...prev, domain: e.target.value }))}
                   placeholder="myproject.example.com"
                   className="mt-1"

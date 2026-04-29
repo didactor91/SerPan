@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNotificationsStore } from '@/stores/notifications.store';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -17,13 +17,14 @@ function uint8ArrayToBase64URL(array: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
+// eslint-disable-next-line max-lines-per-function
 export function SettingsPage() {
   const [passkeys, setPasskeys] = useState<PasskeyInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const { add } = useNotificationsStore();
 
-  const loadPasskeys = async () => {
+  const loadPasskeys = useCallback(async () => {
     setIsLoading(true);
     try {
       const result = await listPasskeys();
@@ -36,11 +37,11 @@ export function SettingsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [add]);
 
   useEffect(() => {
     void loadPasskeys();
-  }, []);
+  }, [loadPasskeys]);
 
   const handleRegisterPasskey = async () => {
     setIsRegistering(true);
@@ -50,7 +51,7 @@ export function SettingsPage() {
 
       // Convert options to the format expected by simplewebauthn browser
       const publicKeyOptions: PublicKeyCredentialCreationOptions = {
-        timeout: options.timeout ?? 60000,
+        timeout: options.timeout,
         challenge: base64URLStringToBuffer(options.challenge),
         rp: options.rp,
         user: {
@@ -63,8 +64,8 @@ export function SettingsPage() {
           options.excludeCredentials?.map((cred) => ({
             id: base64URLStringToBuffer(cred.id),
             type: cred.type,
-          })) || [],
-        attestation: options.attestation || 'none',
+          })) ?? [],
+        attestation: options.attestation ?? 'none',
       };
 
       if (options.authenticatorSelection) {
@@ -161,14 +162,14 @@ export function SettingsPage() {
                   <div>
                     <p className="font-mono text-sm">{passkey.credentialId}</p>
                     <p className="text-xs text-muted-foreground">
-                      {passkey.deviceType || 'Unknown device'} • Added{' '}
+                      {passkey.deviceType ?? 'Unknown device'} • Added{' '}
                       {new Date(passkey.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() => handleDeletePasskey(passkey.credentialId)}
+                    onClick={() => void handleDeletePasskey(passkey.credentialId)}
                   >
                     Delete
                   </Button>

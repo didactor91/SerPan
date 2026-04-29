@@ -32,7 +32,7 @@ interface ContainerInfo {
 
 interface MetricsResponse {
   data: {
-    processes: Array<{
+    processes: {
       name: string;
       status: string;
       pid: number;
@@ -40,7 +40,7 @@ interface MetricsResponse {
       memory: number;
       instances: number;
       uptime: number;
-    }>;
+    }[];
     containers: ContainerInfo[];
   };
 }
@@ -57,6 +57,7 @@ interface ContainerLogsResponse {
   };
 }
 
+// eslint-disable-next-line max-lines-per-function, complexity
 export function ProjectDetailPage() {
   const { slug } = useParams({ from: '/projects/$slug' });
   const queryClient = useQueryClient();
@@ -96,30 +97,32 @@ export function ProjectDetailPage() {
 
   const healthMutation = useMutation<HealthResponse>({
     mutationFn: () => apiClient.get<HealthResponse>(`/projects/${slug}/health`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project', slug] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['project', slug] });
+    },
   });
 
   const updateProjectMutation = useMutation({
     mutationFn: (updates: { domain?: string; healthCheckPort?: number }) =>
       apiClient.put(`/projects/${slug}`, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['project', slug] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['project', slug] });
       setIsEditing(false);
     },
   });
 
   const restartMutation = useMutation({
     mutationFn: () => apiClient.post(`/projects/${slug}/restart`, {}),
-    onSuccess: () => {
-      refetchMetrics();
+    onSuccess: async () => {
+      await refetchMetrics();
     },
   });
 
   const containerActionMutation = useMutation({
     mutationFn: ({ name, action }: { name: string; action: 'start' | 'stop' | 'restart' }) =>
       apiClient.post(`/projects/${slug}/containers/${name}/${action}`, {}),
-    onSuccess: () => {
-      refetchMetrics();
+    onSuccess: async () => {
+      await refetchMetrics();
     },
   });
 
@@ -131,12 +134,13 @@ export function ProjectDetailPage() {
   });
 
   if (isLoading) return <div>Loading...</div>;
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   if (error || !data?.data) return <div>Project not found</div>;
 
   const project = data.data;
-  const instances = project.instances || [];
-  const processes = metricsData?.data?.processes ?? [];
-  const containers = metricsData?.data?.containers ?? [];
+  const instances = project.instances;
+  const processes = metricsData?.data.processes ?? [];
+  const containers = metricsData?.data.containers ?? [];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -164,8 +168,8 @@ export function ProjectDetailPage() {
   };
 
   const handleStartEdit = () => {
-    setEditedDomain(project.domain || '');
-    setEditedPort(project.healthCheckPort?.toString() || '');
+    setEditedDomain(project.domain ?? '');
+    setEditedPort(project.healthCheckPort?.toString() ?? '');
     setIsEditing(true);
   };
 
@@ -244,7 +248,7 @@ export function ProjectDetailPage() {
                     placeholder="domain.example.com"
                   />
                 ) : (
-                  <span>{project.domain || '-'}</span>
+                  <span>{project.domain ?? '-'}</span>
                 )}
               </div>
               <div className="flex items-center justify-between">
@@ -257,7 +261,7 @@ export function ProjectDetailPage() {
                     placeholder="3000"
                   />
                 ) : (
-                  <span>{project.healthCheckPort || '-'}</span>
+                  <span>{project.healthCheckPort ?? '-'}</span>
                 )}
               </div>
               {project.lastHealthCheck && (
@@ -410,7 +414,7 @@ export function ProjectDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="bg-muted rounded p-4 font-mono text-xs overflow-auto max-h-64">
-              {containerLogsData?.data?.logs && containerLogsData.data.logs.length > 0 ? (
+              {containerLogsData?.data.logs && containerLogsData.data.logs.length > 0 ? (
                 containerLogsData.data.logs.map((line: string, i: number) => (
                   <div key={i} className="whitespace-pre-wrap">
                     {line}
@@ -429,7 +433,7 @@ export function ProjectDetailPage() {
           <CardTitle>Recent Logs (PM2)</CardTitle>
         </CardHeader>
         <CardContent>
-          {!logsData?.data?.logs || logsData.data.logs.length === 0 ? (
+          {!logsData?.data.logs || logsData.data.logs.length === 0 ? (
             <p className="text-muted-foreground text-sm">No logs available</p>
           ) : (
             <div className="bg-muted rounded p-4 font-mono text-xs overflow-auto max-h-64">
