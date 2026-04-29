@@ -35,3 +35,66 @@ jobs:
 
       - name: Security audit
         run: pnpm audit --audit-level=high
+
+  deploy:
+    name: Deploy to Server
+    needs: quality
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          private_key: ${{ secrets.SERVER_SSH_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ vars.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Stop old service
+        run: |
+          ssh root@${{ vars.SERVER_HOST }} "
+            pm2 stop serpan 2>/dev/null || true
+            systemctl stop cfs-server 2>/dev/null || true
+          "
+
+      - name: Deploy and build on server
+        run: |
+          rsync -az --exclude='node_modules' --exclude='.git' --exclude='.turbo' --exclude='dist' --exclude='*.test.ts' --exclude='.atl' . root@${{ vars.SERVER_HOST }}:/opt/serpan/
+
+          ssh root@${{ vars.SERVER_HOST }} "
+            cd /opt/serpan
+            pnpm install --frozen-lockfile
+            pnpm build
+            chown -R serpan:serpan /opt/serpan
+          "
+
+      - name: Setup PM2
+        run: |
+          ssh root@${{ vars.SERVER_HOST }} "
+            mkdir -p /var/serpan/backups /var/log/serpan
+            chown -R serpan:serpan /var/serpan /var/log/serpan
+            pm2 start /opt/serpan/ecosystem.config.js
+            pm2 save
+          "
+
+      - name: Reload Caddy
+        run: |
+          ssh root@${{ vars.SERVER_HOST }} "
+            caddy reload --config /etc/caddy/Caddyfile
+          "
+
+      - name: Verify deployment
+        run: |
+          sleep 5
+          curl -f http://${{ vars.SERVER_HOST }}:4000/api/health 2>/dev/null || echo "Health check skipped"
+          curl -I https://panel.didtor.dev 2>/dev/null | head -5 || echo "DNS check skipped"

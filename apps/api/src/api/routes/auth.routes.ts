@@ -73,7 +73,7 @@ router.post('/login', async (req: Request, res: Response, next) => {
     }
 
     // Update last login
-    db.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').run(user.id);
+    db.prepare("UPDATE users SET last_login = datetime('now') WHERE id = ?").run(user.id);
 
     const userForToken: import('@serverctrl/shared').User = {
       id: user.id,
