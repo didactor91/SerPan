@@ -2,6 +2,19 @@ import osu from 'node-os-utils';
 import type { SystemMetrics } from '@serverctrl/shared';
 import { metricsLogger } from '../lib/logger.js';
 
+/**
+ * Converts a value to number, handling the case where node-os-utils
+ * may return strings despite type definitions indicating numbers.
+ */
+function toNumber(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
 export class SystemMetricsService {
   private intervals = new Map<string, NodeJS.Timeout>();
 
@@ -14,19 +27,19 @@ export class SystemMetricsService {
 
     return {
       cpu: {
-        usage: cpu,
+        usage: toNumber(cpu),
       },
       memory: {
-        total: mem.totalMemMb,
-        used: mem.usedMemMb,
-        free: mem.freeMemMb,
-        usagePercent: mem.usedMemPercentage,
+        total: toNumber(mem.totalMemMb),
+        used: toNumber(mem.usedMemMb),
+        free: toNumber(mem.freeMemMb),
+        usagePercent: toNumber(mem.usedMemPercentage),
       },
       disk: {
-        total: drive.totalGb,
-        used: drive.usedGb,
-        free: drive.freeGb,
-        usagePercent: drive.usedPercentage,
+        total: toNumber(drive.totalGb),
+        used: toNumber(drive.usedGb),
+        free: toNumber(drive.freeGb),
+        usagePercent: toNumber(drive.usedPercentage),
       },
       timestamp: Date.now(),
     };

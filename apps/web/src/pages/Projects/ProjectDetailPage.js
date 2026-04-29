@@ -38,26 +38,28 @@ export function ProjectDetailPage() {
   });
   const healthMutation = useMutation({
     mutationFn: () => apiClient.get(`/projects/${slug}/health`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project', slug] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['project', slug] });
+    },
   });
   const updateProjectMutation = useMutation({
     mutationFn: (updates) => apiClient.put(`/projects/${slug}`, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['project', slug] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['project', slug] });
       setIsEditing(false);
     },
   });
   const restartMutation = useMutation({
     mutationFn: () => apiClient.post(`/projects/${slug}/restart`, {}),
-    onSuccess: () => {
-      refetchMetrics();
+    onSuccess: async () => {
+      await refetchMetrics();
     },
   });
   const containerActionMutation = useMutation({
     mutationFn: ({ name, action }) =>
       apiClient.post(`/projects/${slug}/containers/${name}/${action}`, {}),
-    onSuccess: () => {
-      refetchMetrics();
+    onSuccess: async () => {
+      await refetchMetrics();
     },
   });
   const deleteMutation = useMutation({
@@ -67,11 +69,12 @@ export function ProjectDetailPage() {
     },
   });
   if (isLoading) return _jsx('div', { children: 'Loading...' });
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   if (error || !data?.data) return _jsx('div', { children: 'Project not found' });
   const project = data.data;
-  const instances = project.instances || [];
-  const processes = metricsData?.data?.processes ?? [];
-  const containers = metricsData?.data?.containers ?? [];
+  const instances = project.instances;
+  const processes = metricsData?.data.processes ?? [];
+  const containers = metricsData?.data.containers ?? [];
   const getStatusColor = (status) => {
     switch (status) {
       case 'running':
@@ -96,8 +99,8 @@ export function ProjectDetailPage() {
     return mb.toFixed(0) + 'MB';
   };
   const handleStartEdit = () => {
-    setEditedDomain(project.domain || '');
-    setEditedPort(project.healthCheckPort?.toString() || '');
+    setEditedDomain(project.domain ?? '');
+    setEditedPort(project.healthCheckPort?.toString() ?? '');
     setIsEditing(true);
   };
   const handleSaveEdit = () => {
@@ -214,7 +217,7 @@ export function ProjectDetailPage() {
                               className: 'w-48 h-8 text-sm',
                               placeholder: 'domain.example.com',
                             })
-                          : _jsx('span', { children: project.domain || '-' }),
+                          : _jsx('span', { children: project.domain ?? '-' }),
                       ],
                     }),
                     _jsxs('div', {
@@ -228,7 +231,7 @@ export function ProjectDetailPage() {
                               className: 'w-20 h-8 text-sm',
                               placeholder: '3000',
                             })
-                          : _jsx('span', { children: project.healthCheckPort || '-' }),
+                          : _jsx('span', { children: project.healthCheckPort ?? '-' }),
                       ],
                     }),
                     project.lastHealthCheck &&
@@ -359,7 +362,6 @@ export function ProjectDetailPage() {
                   })
                 : _jsx('div', {
                     className: 'space-y-2',
-                    // eslint-disable-next-line max-lines-per-function
                     children: containers.map((container) =>
                       _jsxs(
                         'div',
@@ -487,7 +489,7 @@ export function ProjectDetailPage() {
               children: _jsx('div', {
                 className: 'bg-muted rounded p-4 font-mono text-xs overflow-auto max-h-64',
                 children:
-                  containerLogsData?.data?.logs && containerLogsData.data.logs.length > 0
+                  containerLogsData?.data.logs && containerLogsData.data.logs.length > 0
                     ? containerLogsData.data.logs.map((line, i) =>
                         _jsx('div', { className: 'whitespace-pre-wrap', children: line }, i),
                       )
@@ -504,7 +506,7 @@ export function ProjectDetailPage() {
           _jsx(CardHeader, { children: _jsx(CardTitle, { children: 'Recent Logs (PM2)' }) }),
           _jsx(CardContent, {
             children:
-              !logsData?.data?.logs || logsData.data.logs.length === 0
+              !logsData?.data.logs || logsData.data.logs.length === 0
                 ? _jsx('p', {
                     className: 'text-muted-foreground text-sm',
                     children: 'No logs available',
