@@ -142,17 +142,27 @@ const navItems: NavItem[] = [
 ];
 
 export function Layout() {
-  const { user, logout, checkAuth, isLoading } = useAuthStore();
+  const { user, logout, checkAuth, isAuthenticated } = useAuthStore();
   const { notifications } = useNotificationsStore();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Check auth on mount
+  // Check auth on mount and redirect if not authenticated
   useEffect(() => {
-    if (isLoading) {
-      void checkAuth();
+    // Skip if on login page
+    if (location.pathname === '/login') {
+      return;
     }
-  }, [checkAuth, isLoading]);
+
+    // If not authenticated from persist, check with server
+    if (!isAuthenticated) {
+      void checkAuth().then((valid) => {
+        if (!valid && location.pathname !== '/login') {
+          void navigate({ to: '/login' });
+        }
+      });
+    }
+  }, [checkAuth, isAuthenticated, location.pathname, navigate]);
 
   const handleLogout = () => {
     void logout().then(() => {
