@@ -6,6 +6,7 @@ import { discoveryService } from '../../services/discovery.service.js';
 import { healthService } from '../../services/health.service.js';
 import { deployService } from '../../services/deploy.service.js';
 import { caddyService } from '../../services/caddy.service.js';
+import { pm2Service } from '../../services/pm2.service.js';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { ValidationError } from '../../middleware/errorHandler.js';
 
@@ -345,6 +346,118 @@ router.get('/:slug/deploys', (req: Request, res: Response) => {
 
   const deploys = projectService.getProjectDeploys(project.id);
   res.json({ data: deploys });
+});
+
+// GET /projects/:slug/processes - Get processes for this project
+router.get('/:slug/processes', async (req: Request, res: Response) => {
+  const { slug } = req.params;
+  if (!slug) {
+    res
+      .status(400)
+      .json({ error: { code: 'VALIDATION_ERROR', message: 'slug is required', statusCode: 400 } });
+    return;
+  }
+
+  const project = projectService.getProjectBySlug(slug);
+  if (!project) {
+    res
+      .status(404)
+      .json({ error: { code: 'NOT_FOUND', message: 'Project not found', statusCode: 404 } });
+    return;
+  }
+
+  // Get PM2 processes that match this project's path or name
+  const allProcesses = await pm2Service.list();
+
+  // Filter processes by project - match by path or known naming conventions
+  const projectProcesses = allProcesses.filter((p) => {
+    // Match by PM2 name containing the project slug
+    if (p.name.toLowerCase().includes(slug.replace('-', ''))) return true;
+    // Match by path prefix in name (for ecosystem file based)
+    if (p.name.startsWith(slug.replace('-', ''))) return true;
+    return false;
+  });
+
+  res.json({ data: { processes: projectProcesses } });
+});
+
+// GET /projects/:slug/logs - Get logs for this project
+router.get('/:slug/logs', async (req: Request, res: Response) => {
+  const { slug } = req.params;
+  if (!slug) {
+    res
+      .status(400)
+      .json({ error: { code: 'VALIDATION_ERROR', message: 'slug is required', statusCode: 400 } });
+    return;
+  }
+
+  const project = projectService.getProjectBySlug(slug);
+  if (!project) {
+    res
+      .status(404)
+      .json({ error: { code: 'NOT_FOUND', message: 'Project not found', statusCode: 404 } });
+    return;
+  }
+
+  // Get instances for this project to find PM2 names
+  const instances = projectService.getProjectInstances(project.id);
+  const pm2Names = instances.filter((i) => i.pm2Name).map((i) => i.pm2Name as string);
+
+  if (pm2Names.length === 0) {
+    res.json({ data: { logs: [] } });
+    return;
+  }
+
+  // Get logs for each PM2 process
+  const allLogs: string[] = [];
+  for (const name of pm2Names) {
+    try {
+      const logs = await pm2Service.getLogs(name, 50);
+      allLogs.push(...logs.map((l) => `[${name}] ${l}`));
+    } catch {
+      // Skip if can't get logs for this process
+    }
+  }
+
+  res.json({ data: { logs: allLogs.slice(-100) } }); // Last 100 lines
+});
+
+// POST /projects/:slug/restart - Restart all project processes
+router.post('/:slug/restart', async (req: Request, res: Response) => {
+  const { slug } = req.params;
+  if (!slug) {
+    res
+      .status(400)
+      .json({ error: { code: 'VALIDATION_ERROR', message: 'slug is required', statusCode: 400 } });
+    return;
+  }
+
+  const project = projectService.getProjectBySlug(slug);
+  if (!project) {
+    res
+      .status(404)
+      .json({ error: { code: 'NOT_FOUND', message: 'Project not found', statusCode: 404 } });
+    return;
+  }
+
+  const instances = projectService.getProjectInstances(project.id);
+  const pm2Names = instances.filter((i) => i.pm2Name).map((i) => i.pm2Name as string);
+
+  const results: { name: string; success: boolean; error?: string }[] = [];
+  for (const name of pm2Names) {
+    try {
+      await pm2Service.restart(name);
+      results.push({ name, success: true });
+    } catch (err) {
+      results.push({
+        name,
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  }
+
+  res.json({ data: { results } });
 });
 
 export default router;
