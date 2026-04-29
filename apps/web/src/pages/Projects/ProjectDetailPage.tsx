@@ -19,7 +19,18 @@ interface HealthResponse {
   };
 }
 
-interface ProcessesResponse {
+interface ContainerInfo {
+  id: string;
+  name: string;
+  image: string;
+  status: string;
+  state: string;
+  cpuPercent: number;
+  memoryPercent: number;
+  memoryUsage: string;
+}
+
+interface MetricsResponse {
   data: {
     processes: Array<{
       name: string;
@@ -30,10 +41,17 @@ interface ProcessesResponse {
       instances: number;
       uptime: number;
     }>;
+    containers: ContainerInfo[];
   };
 }
 
-interface LogResponse {
+interface LogsResponse {
+  data: {
+    logs: string[];
+  };
+}
+
+interface ContainerLogsResponse {
   data: {
     logs: string[];
   };
@@ -45,6 +63,7 @@ export function ProjectDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedDomain, setEditedDomain] = useState('');
   const [editedPort, setEditedPort] = useState('');
+  const [selectedContainerLogs, setSelectedContainerLogs] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery<ProjectResponse>({
     queryKey: ['project', slug],
@@ -52,18 +71,28 @@ export function ProjectDetailPage() {
     enabled: !!slug,
   });
 
-  const { data: processesData } = useQuery<ProcessesResponse>({
-    queryKey: ['project-processes', slug],
-    queryFn: () => apiClient.get<ProcessesResponse>(`/projects/${slug}/processes`),
+  const { data: metricsData, refetch: refetchMetrics } = useQuery<MetricsResponse>({
+    queryKey: ['project-metrics', slug],
+    queryFn: () => apiClient.get<MetricsResponse>(`/projects/${slug}/metrics`),
     enabled: !!slug,
     refetchInterval: 10000,
   });
 
-  const { data: logsData } = useQuery<LogResponse>({
+  const { data: logsData } = useQuery<LogsResponse>({
     queryKey: ['project-logs', slug],
-    queryFn: () => apiClient.get<LogResponse>(`/projects/${slug}/logs`),
+    queryFn: () => apiClient.get<LogsResponse>(`/projects/${slug}/logs`),
     enabled: !!slug,
   });
+
+  const { data: containerLogsData, refetch: refetchContainerLogs } =
+    useQuery<ContainerLogsResponse>({
+      queryKey: ['container-logs', selectedContainerLogs],
+      queryFn: () =>
+        apiClient.get<ContainerLogsResponse>(
+          `/projects/${slug}/containers/${selectedContainerLogs}/logs`,
+        ),
+      enabled: !!slug && !!selectedContainerLogs,
+    });
 
   const healthMutation = useMutation<HealthResponse>({
     mutationFn: () => apiClient.get<HealthResponse>(`/projects/${slug}/health`),
@@ -81,7 +110,17 @@ export function ProjectDetailPage() {
 
   const restartMutation = useMutation({
     mutationFn: () => apiClient.post(`/projects/${slug}/restart`, {}),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project-processes', slug] }),
+    onSuccess: () => {
+      refetchMetrics();
+    },
+  });
+
+  const containerActionMutation = useMutation({
+    mutationFn: ({ name, action }: { name: string; action: 'start' | 'stop' | 'restart' }) =>
+      apiClient.post(`/projects/${slug}/containers/${name}/${action}`, {}),
+    onSuccess: () => {
+      refetchMetrics();
+    },
   });
 
   const deleteMutation = useMutation({
@@ -96,32 +135,26 @@ export function ProjectDetailPage() {
 
   const project = data.data;
   const instances = project.instances || [];
-  const processes = processesData?.data.processes ?? [];
+  const processes = metricsData?.data?.processes ?? [];
+  const containers = metricsData?.data?.containers ?? [];
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'running':
       case 'online':
+      case 'Up':
         return 'bg-green-500';
       case 'stopped':
+      case 'Exited':
         return 'bg-yellow-500';
       case 'error':
       case 'errored':
+      case 'Restarting':
+      case 'Dead':
         return 'bg-red-500';
       default:
         return 'bg-gray-500';
     }
-  };
-
-  const formatUptime = (ms: number) => {
-    if (!ms) return '-';
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    if (days > 0) return `${days}d ${hours % 24}h`;
-    if (hours > 0) return `${hours}h ${minutes % 60}m`;
-    return `${minutes}m`;
   };
 
   const formatMemory = (bytes: number) => {
@@ -158,7 +191,7 @@ export function ProjectDetailPage() {
             {healthMutation.isPending ? 'Checking...' : 'Check Health'}
           </Button>
           <Button onClick={() => restartMutation.mutate()} disabled={restartMutation.isPending}>
-            {restartMutation.isPending ? 'Restarting...' : 'Restart'}
+            {restartMutation.isPending ? 'Restarting...' : 'Restart All'}
           </Button>
           <Button variant="destructive" onClick={() => deleteMutation.mutate()}>
             Delete
@@ -239,51 +272,168 @@ export function ProjectDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>PM2 Processes</CardTitle>
+            <CardTitle>System Resources</CardTitle>
           </CardHeader>
           <CardContent>
-            {processes.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                No PM2 processes found for this project
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {processes.map((proc) => (
-                  <div
-                    key={proc.name}
-                    className="flex justify-between items-center p-2 border rounded"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{proc.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        PID: {proc.pid} | CPU: {proc.cpu.toFixed(1)}% | RAM:{' '}
-                        {formatMemory(proc.memory)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Project-specific resource usage:</p>
+              {processes.length === 0 && containers.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No processes or containers found</p>
+              ) : (
+                <div className="space-y-2">
+                  {processes.map((proc) => (
+                    <div
+                      key={proc.name}
+                      className="flex justify-between items-center p-2 border rounded"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{proc.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          PID: {proc.pid} | CPU: {proc.cpu.toFixed(1)}% | RAM:{' '}
+                          {formatMemory(proc.memory)}
+                        </p>
+                      </div>
                       <Badge className={getStatusColor(proc.status)}>{proc.status}</Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {formatUptime(proc.uptime)}
-                      </span>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                  {containers.map((container) => (
+                    <div
+                      key={container.name}
+                      className="flex justify-between items-center p-2 border rounded"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{container.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {container.image} | CPU: {container.cpuPercent.toFixed(1)}% | RAM:{' '}
+                          {container.memoryUsage}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={getStatusColor(container.state)}>{container.state}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Logs</CardTitle>
+          <CardTitle>Containers</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {containers.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No Docker containers found for this project
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {containers.map((container) => (
+                <div key={container.name} className="border rounded p-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <div>
+                      <p className="font-medium">{container.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {container.image} | ID: {container.id.slice(0, 12)}
+                      </p>
+                    </div>
+                    <Badge className={getStatusColor(container.state)}>{container.state}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs">CPU: {container.cpuPercent.toFixed(1)}%</span>
+                    <span className="text-xs">RAM: {container.memoryUsage}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Status: {container.status}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        containerActionMutation.mutate({ name: container.name, action: 'start' })
+                      }
+                      disabled={containerActionMutation.isPending || container.state === 'Up'}
+                    >
+                      Start
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        containerActionMutation.mutate({ name: container.name, action: 'stop' })
+                      }
+                      disabled={containerActionMutation.isPending || container.state !== 'Up'}
+                    >
+                      Stop
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        containerActionMutation.mutate({ name: container.name, action: 'restart' })
+                      }
+                      disabled={containerActionMutation.isPending}
+                    >
+                      Restart
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setSelectedContainerLogs(container.name);
+                        void refetchContainerLogs();
+                      }}
+                    >
+                      View Logs
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {selectedContainerLogs && (
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle>Logs: {selectedContainerLogs}</CardTitle>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedContainerLogs(null)}>
+                Close
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-muted rounded p-4 font-mono text-xs overflow-auto max-h-64">
+              {containerLogsData?.data?.logs && containerLogsData.data.logs.length > 0 ? (
+                containerLogsData.data.logs.map((line: string, i: number) => (
+                  <div key={i} className="whitespace-pre-wrap">
+                    {line}
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted-foreground">No logs available</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Logs (PM2)</CardTitle>
         </CardHeader>
         <CardContent>
           {!logsData?.data?.logs || logsData.data.logs.length === 0 ? (
             <p className="text-muted-foreground text-sm">No logs available</p>
           ) : (
             <div className="bg-muted rounded p-4 font-mono text-xs overflow-auto max-h-64">
-              {logsData.data.logs.map((line, i) => (
+              {logsData.data.logs.map((line: string, i: number) => (
                 <div key={i} className="whitespace-pre-wrap">
                   {line}
                 </div>

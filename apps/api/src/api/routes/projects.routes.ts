@@ -7,6 +7,7 @@ import { healthService } from '../../services/health.service.js';
 import { deployService } from '../../services/deploy.service.js';
 import { caddyService } from '../../services/caddy.service.js';
 import { pm2Service } from '../../services/pm2.service.js';
+import { dockerService } from '../../services/docker.service.js';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { ValidationError } from '../../middleware/errorHandler.js';
 
@@ -451,6 +452,280 @@ router.post('/:slug/restart', async (req: Request, res: Response) => {
     } catch (err) {
       results.push({
         name,
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  }
+
+  res.json({ data: { results } });
+});
+
+// GET /projects/:slug/containers - Get Docker containers for this project
+router.get('/:slug/containers', async (req: Request, res: Response) => {
+  const { slug } = req.params;
+  if (!slug) {
+    res
+      .status(400)
+      .json({ error: { code: 'VALIDATION_ERROR', message: 'slug is required', statusCode: 400 } });
+    return;
+  }
+
+  const project = projectService.getProjectBySlug(slug);
+  if (!project) {
+    res
+      .status(404)
+      .json({ error: { code: 'NOT_FOUND', message: 'Project not found', statusCode: 404 } });
+    return;
+  }
+
+  const containers = await dockerService.getProjectContainers(project.path);
+
+  res.json({ data: { containers } });
+});
+
+// GET /projects/:slug/containers/:name/logs - Get logs for a specific container
+router.get('/:slug/containers/:name/logs', async (req: Request, res: Response) => {
+  const { slug, name } = req.params;
+  if (!slug || !name) {
+    res
+      .status(400)
+      .json({
+        error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
+      });
+    return;
+  }
+
+  const project = projectService.getProjectBySlug(slug);
+  if (!project) {
+    res
+      .status(404)
+      .json({ error: { code: 'NOT_FOUND', message: 'Project not found', statusCode: 404 } });
+    return;
+  }
+
+  const logs = await dockerService.getContainerLogs(name, 100);
+
+  res.json({ data: { logs } });
+});
+
+// POST /projects/:slug/containers/:name/start - Start container
+router.post('/:slug/containers/:name/start', async (req: Request, res: Response) => {
+  const { slug, name } = req.params;
+  if (!slug || !name) {
+    res
+      .status(400)
+      .json({
+        error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
+      });
+    return;
+  }
+
+  const project = projectService.getProjectBySlug(slug);
+  if (!project) {
+    res
+      .status(404)
+      .json({ error: { code: 'NOT_FOUND', message: 'Project not found', statusCode: 404 } });
+    return;
+  }
+
+  const success = await dockerService.startContainer(name);
+  if (success) {
+    res.json({ data: { message: `Container ${name} started` } });
+  } else {
+    res
+      .status(500)
+      .json({
+        error: {
+          code: 'CONTAINER_START_FAILED',
+          message: `Failed to start container ${name}`,
+          statusCode: 500,
+        },
+      });
+  }
+});
+
+// POST /projects/:slug/containers/:name/stop - Stop container
+router.post('/:slug/containers/:name/stop', async (req: Request, res: Response) => {
+  const { slug, name } = req.params;
+  if (!slug || !name) {
+    res
+      .status(400)
+      .json({
+        error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
+      });
+    return;
+  }
+
+  const project = projectService.getProjectBySlug(slug);
+  if (!project) {
+    res
+      .status(404)
+      .json({ error: { code: 'NOT_FOUND', message: 'Project not found', statusCode: 404 } });
+    return;
+  }
+
+  const success = await dockerService.stopContainer(name);
+  if (success) {
+    res.json({ data: { message: `Container ${name} stopped` } });
+  } else {
+    res
+      .status(500)
+      .json({
+        error: {
+          code: 'CONTAINER_STOP_FAILED',
+          message: `Failed to stop container ${name}`,
+          statusCode: 500,
+        },
+      });
+  }
+});
+
+// POST /projects/:slug/containers/:name/restart - Restart container
+router.post('/:slug/containers/:name/restart', async (req: Request, res: Response) => {
+  const { slug, name } = req.params;
+  if (!slug || !name) {
+    res
+      .status(400)
+      .json({
+        error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
+      });
+    return;
+  }
+
+  const project = projectService.getProjectBySlug(slug);
+  if (!project) {
+    res
+      .status(404)
+      .json({ error: { code: 'NOT_FOUND', message: 'Project not found', statusCode: 404 } });
+    return;
+  }
+
+  const success = await dockerService.restartContainer(name);
+  if (success) {
+    res.json({ data: { message: `Container ${name} restarted` } });
+  } else {
+    res
+      .status(500)
+      .json({
+        error: {
+          code: 'CONTAINER_RESTART_FAILED',
+          message: `Failed to restart container ${name}`,
+          statusCode: 500,
+        },
+      });
+  }
+});
+
+// GET /projects/:slug/metrics - Get metrics for this project
+router.get('/:slug/metrics', async (req: Request, res: Response) => {
+  const { slug } = req.params;
+  if (!slug) {
+    res
+      .status(400)
+      .json({ error: { code: 'VALIDATION_ERROR', message: 'slug is required', statusCode: 400 } });
+    return;
+  }
+
+  const project = projectService.getProjectBySlug(slug);
+  if (!project) {
+    res
+      .status(404)
+      .json({ error: { code: 'NOT_FOUND', message: 'Project not found', statusCode: 404 } });
+    return;
+  }
+
+  // Get both PM2 processes and Docker containers
+  const instances = projectService.getProjectInstances(project.id);
+  const pm2Names = instances.filter((i) => i.pm2Name).map((i) => i.pm2Name as string);
+
+  // Get PM2 processes
+  const allProcesses = await pm2Service.list();
+  const projectProcesses = allProcesses.filter((p) => {
+    if (pm2Names.length > 0) {
+      return pm2Names.includes(p.name);
+    }
+    // Match by slug in name
+    const normalizedSlug = slug.replace(/-/g, '').toLowerCase();
+    const normalizedName = p.name.replace(/-/g, '').toLowerCase();
+    return normalizedName.includes(normalizedSlug) || normalizedSlug.includes(normalizedName);
+  });
+
+  // Get Docker containers
+  const containers = await dockerService.getProjectContainers(project.path);
+
+  res.json({
+    data: {
+      processes: projectProcesses.map((p) => ({
+        name: p.name,
+        status: p.status,
+        cpu: p.cpu,
+        memory: p.memory,
+        instances: p.instances,
+        uptime: p.uptime,
+      })),
+      containers: containers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        image: c.image,
+        status: c.status,
+        state: c.state,
+        cpuPercent: c.cpuPercent,
+        memoryPercent: c.memoryPercent,
+        memoryUsage: c.memoryUsage,
+      })),
+    },
+  });
+});
+
+// POST /projects/:slug/restart - Restart all project processes (PM2 and Docker)
+router.post('/:slug/restart', async (req: Request, res: Response) => {
+  const { slug } = req.params;
+  if (!slug) {
+    res
+      .status(400)
+      .json({ error: { code: 'VALIDATION_ERROR', message: 'slug is required', statusCode: 400 } });
+    return;
+  }
+
+  const project = projectService.getProjectBySlug(slug);
+  if (!project) {
+    res
+      .status(404)
+      .json({ error: { code: 'NOT_FOUND', message: 'Project not found', statusCode: 404 } });
+    return;
+  }
+
+  const results: { name: string; type: string; success: boolean; error?: string }[] = [];
+
+  // Restart PM2 processes
+  const instances = projectService.getProjectInstances(project.id);
+  const pm2Names = instances.filter((i) => i.pm2Name).map((i) => i.pm2Name as string);
+
+  for (const name of pm2Names) {
+    try {
+      await pm2Service.restart(name);
+      results.push({ name, type: 'pm2', success: true });
+    } catch (err) {
+      results.push({
+        name,
+        type: 'pm2',
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  }
+
+  // Restart Docker containers
+  const containers = await dockerService.getProjectContainers(project.path);
+  for (const container of containers) {
+    try {
+      await dockerService.restartContainer(container.name);
+      results.push({ name: container.name, type: 'docker', success: true });
+    } catch (err) {
+      results.push({
+        name: container.name,
+        type: 'docker',
         success: false,
         error: err instanceof Error ? err.message : 'Unknown error',
       });
