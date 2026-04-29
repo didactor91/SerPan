@@ -10,13 +10,13 @@ import { DomainsPage } from './pages/Domains/DomainsPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
 import { ProjectsPage } from './pages/Projects/ProjectsPage';
 import { ProjectDetailPage } from './pages/Projects/ProjectDetailPage';
-import { useAuthStore } from './stores/auth.store';
-// Auth route guard
+// Auth route guard - disabled in favor of async auth check in Layout
+// The async checkAuth in Layout component provides auth verification
+// without blocking navigation during hydration
 function authGuard() {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) {
-        throw new Error('Not authenticated');
-    }
+    // Auth is handled asynchronously in Layout component
+    // This prevents "not authenticated" errors during initial hydration
+    return;
 }
 // Root route
 const rootRoute = createRootRoute({
