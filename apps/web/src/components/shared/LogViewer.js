@@ -90,6 +90,7 @@ export function LogViewer({ lines, autoScroll = true, onLine }) {
     style: { height: '400px' },
   });
 }
+// eslint-disable-next-line react-refresh/only-export-components
 export function clearTerminal(terminal) {
   if (terminal) {
     terminal.clear();

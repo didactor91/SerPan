@@ -24,12 +24,14 @@ export function ProjectsPage() {
   });
   const discoverMutation = useMutation({
     mutationFn: () => apiClient.get('/projects/discover'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
   });
   const createProjectMutation = useMutation({
     mutationFn: (project) => apiClient.post('/projects', project),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['projects'] });
       setShowCreateForm(false);
       setNewProject({ name: '', slug: '', type: 'pm2', path: '', domain: '', description: '' });
     },
@@ -150,7 +152,7 @@ export function ProjectsPage() {
                         children: 'Domain (optional)',
                       }),
                       _jsx(Input, {
-                        value: newProject.domain || '',
+                        value: newProject.domain ?? '',
                         onChange: (e) =>
                           setNewProject((prev) => ({ ...prev, domain: e.target.value })),
                         placeholder: 'myproject.example.com',
