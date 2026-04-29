@@ -80,6 +80,43 @@ function initializeSchema(db: Database.Database): void {
       description TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      description TEXT,
+      type TEXT NOT NULL CHECK(type IN ('pm2', 'docker-compose', 'generic')),
+      path TEXT NOT NULL,
+      serpan_config_path TEXT,
+      domain TEXT,
+      health_check_url TEXT,
+      health_check_port INTEGER,
+      health_check_enabled INTEGER DEFAULT 1,
+      status TEXT DEFAULT 'unknown' CHECK(status IN ('running', 'stopped', 'error', 'unknown', 'deploying')),
+      last_health_check TEXT,
+      last_deploy TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS project_instances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      server_name TEXT NOT NULL DEFAULT 'default',
+      server_host TEXT,
+      port INTEGER,
+      pid INTEGER,
+      pm2_name TEXT,
+      container_id TEXT,
+      container_status TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_projects_slug ON projects(slug);
+    CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+    CREATE INDEX IF NOT EXISTS idx_instances_project_id ON project_instances(project_id);
   `);
 }
 
