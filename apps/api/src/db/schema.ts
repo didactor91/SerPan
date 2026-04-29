@@ -31,6 +31,7 @@ function initializeSchema(db: Database.Database): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
+      webauthn_user_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       last_login TEXT
     );
@@ -59,6 +60,19 @@ function initializeSchema(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at);
     CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics_history(timestamp);
+
+    CREATE TABLE IF NOT EXISTS user_passkeys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      credential_id TEXT NOT NULL UNIQUE,
+      public_key TEXT NOT NULL,
+      counter INTEGER NOT NULL DEFAULT 0,
+      device_type TEXT,
+      device_name TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON user_passkeys(user_id);
 
     CREATE TABLE IF NOT EXISTS proxy_snapshots (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

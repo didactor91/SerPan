@@ -17,6 +17,8 @@ const envSchema = z.object({
   ALERT_CPU_THRESHOLD: z.coerce.number().default(85),
   ALERT_MEMORY_THRESHOLD: z.coerce.number().default(90),
   ALERT_CERT_EXPIRY_DAYS: z.coerce.number().default(14),
+  WEBAUTHN_RP_ID: z.string().default('serpan.local'),
+  WEBAUTHN_RP_NAME: z.string().default('ServerCtrl'),
 });
 
 export type Env = z.infer<typeof envSchema>;
