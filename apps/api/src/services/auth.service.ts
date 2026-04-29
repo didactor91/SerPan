@@ -49,7 +49,12 @@ export class AuthService {
 
   decodeToken(token: string): JWTPayload | null {
     try {
-      return jwt.decode(token) as JWTPayload;
+      const result = jwt.decode(token);
+      if (!result || typeof result === 'string') return null;
+      if ('userId' in result && 'username' in result) {
+        return result as JWTPayload;
+      }
+      return null;
     } catch {
       return null;
     }

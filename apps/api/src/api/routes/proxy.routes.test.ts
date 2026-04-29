@@ -102,10 +102,7 @@ describe('Proxy Routes', () => {
 
       await request(app).post('/proxy/routes').send({ host: 'test.com', upstreamPort: 4000 });
 
-      expect(caddyService.saveSnapshot).toHaveBeenCalledWith(
-        'Before modifying routes',
-        expect.anything(),
-      );
+      expect(caddyService.saveSnapshot).toHaveBeenCalledWith('Before modifying routes');
     });
 
     it('should default tls to true when not provided', async () => {
@@ -174,7 +171,7 @@ describe('Proxy Routes', () => {
       const res = await request(app).post('/proxy/rollback/1');
 
       expect(res.status).toBe(200);
-      expect(caddyService.rollback).toHaveBeenCalledWith(1, expect.anything());
+      expect(caddyService.rollback).toHaveBeenCalledWith(1);
     });
   });
 

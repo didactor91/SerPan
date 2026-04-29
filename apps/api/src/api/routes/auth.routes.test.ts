@@ -11,22 +11,48 @@ vi.mock('../../services/auth.service.js', () => ({
     createAccessToken: vi.fn().mockReturnValue('test-access-token'),
     createRefreshToken: vi.fn().mockReturnValue('test-refresh-token'),
     verifyAccessToken: vi.fn().mockReturnValue({ userId: 1, username: 'testuser' }),
+    verifyRefreshToken: vi.fn().mockReturnValue({ userId: 1, username: 'testuser' }),
   },
 }));
 
-vi.mock('../../db/schema.js', () => ({
-  getDatabase: () => ({
-    prepare: vi.fn().mockReturnValue({
-      get: vi.fn().mockReturnValue({
-        id: 1,
-        username: 'testuser',
-        password_hash: 'hashed_password',
-        created_at: '2024-01-01T00:00:00.000Z',
-        last_login: null,
+// Mock schema with Drizzle-compatible interface
+const mockDb = {
+  select: () => ({
+    from: (table: unknown) => ({
+      where: (condition: unknown) => ({
+        get: vi.fn(() => ({
+          id: 1,
+          username: 'testuser',
+          passwordHash: 'hashed_password',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          lastLogin: null,
+        })),
       }),
-      run: vi.fn(),
     }),
   }),
+  update: (table: unknown) => ({
+    set: (data: unknown) => ({
+      where: (condition: unknown) => ({
+        run: vi.fn(() => ({ changes: 1 })),
+      }),
+    }),
+  }),
+};
+
+// Create mock table references
+const mockUsers = {
+  tableName: 'users',
+  id: { name: 'id' },
+  username: { name: 'username' },
+  passwordHash: { name: 'password_hash' },
+  webauthnUserId: { name: 'webauthn_user_id' },
+  createdAt: { name: 'created_at' },
+  lastLogin: { name: 'last_login' },
+};
+
+vi.mock('../../db/schema.js', () => ({
+  getDatabase: vi.fn(() => mockDb),
+  users: mockUsers,
 }));
 
 describe('Auth Routes', () => {

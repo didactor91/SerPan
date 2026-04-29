@@ -1,7 +1,8 @@
 import { Router, type Router as ExpressRouter } from 'express';
 import type { Request, Response } from 'express';
+import { eq } from 'drizzle-orm';
 import { authService } from '../../services/auth.service.js';
-import { getDatabase } from '../../db/schema.js';
+import { getDatabase, users } from '../../db/schema.js';
 import { optionalAuth } from '../../middleware/auth.middleware.js';
 import {
   UnauthorizedError,
@@ -51,22 +52,14 @@ router.post('/login', async (req: Request, res: Response, next) => {
     }
 
     const db = getDatabase();
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as
-      | {
-          id: number;
-          username: string;
-          password_hash: string;
-          created_at: string;
-          last_login?: string;
-        }
-      | undefined;
+    const user = db.select().from(users).where(eq(users.username, username)).get();
 
     if (!user) {
       next(new UnauthorizedError('Invalid credentials'));
       return;
     }
 
-    const validPassword = await authService.verifyPassword(password, user.password_hash);
+    const validPassword = await authService.verifyPassword(password, user.passwordHash);
 
     if (!validPassword) {
       next(new UnauthorizedError('Invalid credentials'));
@@ -74,15 +67,18 @@ router.post('/login', async (req: Request, res: Response, next) => {
     }
 
     // Update last login
-    db.prepare("UPDATE users SET last_login = datetime('now') WHERE id = ?").run(user.id);
+    db.update(users)
+      .set({ lastLogin: new Date().toISOString() })
+      .where(eq(users.id, user.id))
+      .run();
 
     const userForToken: import('@serverctrl/shared').User = {
       id: user.id,
       username: user.username,
-      createdAt: user.created_at,
+      createdAt: user.createdAt,
     };
-    if (user.last_login) {
-      userForToken.lastLogin = user.last_login;
+    if (user.lastLogin) {
+      userForToken.lastLogin = user.lastLogin;
     }
 
     const accessToken = authService.createAccessToken(userForToken);
@@ -108,8 +104,8 @@ router.post('/login', async (req: Request, res: Response, next) => {
         user: {
           id: user.id,
           username: user.username,
-          createdAt: user.created_at,
-          lastLogin: user.last_login,
+          createdAt: user.createdAt,
+          lastLogin: user.lastLogin,
         },
       },
     });
@@ -156,15 +152,15 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
     const db = getDatabase();
     const user = db
-      .prepare('SELECT id, username, created_at, last_login FROM users WHERE id = ?')
-      .get(payload.userId) as
-      | {
-          id: number;
-          username: string;
-          created_at: string;
-          last_login?: string;
-        }
-      | undefined;
+      .select({
+        id: users.id,
+        username: users.username,
+        createdAt: users.createdAt,
+        lastLogin: users.lastLogin,
+      })
+      .from(users)
+      .where(eq(users.id, payload.userId))
+      .get();
 
     if (!user) {
       res.status(401).json({
@@ -180,10 +176,10 @@ router.post('/refresh', async (req: Request, res: Response) => {
     const userForToken: import('@serverctrl/shared').User = {
       id: user.id,
       username: user.username,
-      createdAt: user.created_at,
+      createdAt: user.createdAt,
     };
-    if (user.last_login) {
-      userForToken.lastLogin = user.last_login;
+    if (user.lastLogin) {
+      userForToken.lastLogin = user.lastLogin;
     }
 
     const newAccessToken = authService.createAccessToken(userForToken);
@@ -209,8 +205,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
         user: {
           id: user.id,
           username: user.username,
-          createdAt: user.created_at,
-          lastLogin: user.last_login,
+          createdAt: user.createdAt,
+          lastLogin: user.lastLogin,
         },
       },
     });
@@ -240,15 +236,15 @@ router.get('/me', optionalAuth, (req: Request, res: Response) => {
 
   const db = getDatabase();
   const user = db
-    .prepare('SELECT id, username, created_at, last_login FROM users WHERE id = ?')
-    .get(req.user.userId) as
-    | {
-        id: number;
-        username: string;
-        created_at: string;
-        last_login?: string;
-      }
-    | undefined;
+    .select({
+      id: users.id,
+      username: users.username,
+      createdAt: users.createdAt,
+      lastLogin: users.lastLogin,
+    })
+    .from(users)
+    .where(eq(users.id, req.user.userId))
+    .get();
 
   if (!user) {
     res.status(401).json({
@@ -266,8 +262,8 @@ router.get('/me', optionalAuth, (req: Request, res: Response) => {
       user: {
         id: user.id,
         username: user.username,
-        createdAt: user.created_at,
-        lastLogin: user.last_login,
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin,
       },
     },
   });
