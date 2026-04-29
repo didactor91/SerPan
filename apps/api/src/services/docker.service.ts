@@ -1,9 +1,32 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { apiLogger } from '../lib/logger.js';
 import { exec as execAsync } from 'child_process';
 import { promisify } from 'util';
 
 const exec = promisify(execAsync);
+
+/**
+ * Raw Docker PS output - Docker's native JSON format
+ * @see https://docs.docker.com/engine/api/v1.41/#tag/Container/operation/ContainerList
+ */
+interface DockerPsJson {
+  ID: string;
+  Names: string;
+  Image: string;
+  Status: string;
+  State: string;
+  CreatedAt: string;
+  Ports: string;
+  Networks: string;
+}
+
+/**
+ * Raw Docker stats output
+ */
+interface DockerStatsJson {
+  CPU: string | null;
+  MemPerc: string | null;
+  MemUsage: string | null;
+}
 
 export interface ContainerInfo {
   id: string;
@@ -21,15 +44,11 @@ export interface ContainerInfo {
 
 export class DockerService {
   private async exec(command: string): Promise<string> {
-    try {
-      const { stdout, stderr } = await exec(command, { maxBuffer: 1024 * 1024 * 10 });
-      if (stderr && !stdout) {
-        throw new Error(stderr);
-      }
-      return stdout;
-    } catch (err) {
-      throw err;
+    const { stdout, stderr } = await exec(command, { maxBuffer: 1024 * 1024 * 10 });
+    if (stderr && !stdout) {
+      throw new Error(stderr);
     }
+    return stdout;
   }
 
   async listContainers(): Promise<ContainerInfo[]> {
@@ -45,19 +64,19 @@ export class DockerService {
       }
 
       return lines.map((line: string) => {
-        const data = JSON.parse(line);
+        const data = JSON.parse(line) as DockerPsJson;
         return {
-          id: data.ID || '',
-          name: data.Names || '',
-          image: data.Image || '',
-          status: data.Status || '',
-          state: data.State || '',
-          created: data.CreatedAt || '',
+          id: data.ID,
+          name: data.Names,
+          image: data.Image,
+          status: data.Status,
+          state: data.State,
+          created: data.CreatedAt,
           ports: data.Ports ? data.Ports.split(',').map((p: string) => p.trim()) : [],
           cpuPercent: 0,
           memoryPercent: 0,
           memoryUsage: '',
-          networkMode: data.Networks || '',
+          networkMode: data.Networks,
         };
       });
     } catch (error) {
@@ -78,13 +97,13 @@ export class DockerService {
         return null;
       }
 
-      const data = JSON.parse(output);
-      const cpuStr = (data.CPU || '0%').replace('%', '');
-      const memStr = (data.MemPerc || '0%').replace('%', '');
+      const data = JSON.parse(output) as DockerStatsJson;
+      const cpuStr = (data.CPU ?? '0%').replace('%', '');
+      const memStr = (data.MemPerc ?? '0%').replace('%', '');
 
       return {
         cpu: parseFloat(cpuStr) || 0,
-        memory: data.MemUsage || '0MB/0MB',
+        memory: data.MemUsage ?? '0',
         memoryPercent: parseFloat(memStr) || 0,
       };
     } catch {
@@ -94,7 +113,7 @@ export class DockerService {
 
   async getContainerLogs(containerName: string, lines = 100): Promise<string[]> {
     try {
-      const output = await this.exec(`docker logs ${containerName} --tail ${lines} 2>&1`);
+      const output = await this.exec(`docker logs ${containerName} --tail ${String(lines)} 2>&1`);
       return output.split('\n').slice(-lines);
     } catch (error) {
       apiLogger.error('Failed to get container logs', { error, containerName });
@@ -137,7 +156,7 @@ export class DockerService {
 
     // Extract project name from path (e.g., /opt/tortoise-gps -> tortoise-gps)
     const pathParts = projectPath.split('/');
-    const projectFolder = pathParts[pathParts.length - 1] || '';
+    const projectFolder = pathParts[pathParts.length - 1] ?? '';
 
     // Extract prefix: "tortoise-gps" -> "tortoise", "my-project" -> "my"
     // This assumes containers are named "{prefix}-*" (e.g., tortoise-track-app)
@@ -157,9 +176,9 @@ export class DockerService {
         const stats = await this.getContainerStats(c.name);
         return {
           ...c,
-          cpuPercent: stats?.cpu || 0,
-          memoryPercent: stats?.memoryPercent || 0,
-          memoryUsage: stats?.memory || '',
+          cpuPercent: stats?.cpu ?? 0,
+          memoryPercent: stats?.memoryPercent ?? 0,
+          memoryUsage: stats?.memory ?? '',
         };
       }),
     );
@@ -183,9 +202,9 @@ export class DockerService {
     const stats = await this.getContainerStats(found.name);
     return {
       ...found,
-      cpuPercent: stats?.cpu || 0,
-      memoryPercent: stats?.memoryPercent || 0,
-      memoryUsage: stats?.memory || '',
+      cpuPercent: stats?.cpu ?? 0,
+      memoryPercent: stats?.memoryPercent ?? 0,
+      memoryUsage: stats?.memory ?? '',
     };
   }
 }

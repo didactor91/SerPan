@@ -2,9 +2,7 @@ import { Router, type Router as ExpressRouter } from 'express';
 import { z } from 'zod';
 import type { Request, Response } from 'express';
 import { caddyService } from '../../services/caddy.service.js';
-import { getDatabase } from '../../db/schema.js';
 import { ValidationError } from '../../middleware/errorHandler.js';
-import type { Database } from '../../services/caddy.service.js';
 
 const router: ExpressRouter = Router();
 
@@ -54,10 +52,8 @@ router.post('/routes', async (req: Request, res: Response) => {
 
   const { host, upstreamPort, tls } = parsed.data;
 
-  const db = getDatabase();
-
   // Save snapshot before change
-  await caddyService.saveSnapshot('Before modifying routes', db as unknown as Database);
+  await caddyService.saveSnapshot('Before modifying routes');
 
   const routeId = await caddyService.addRoute(host, upstreamPort, tls);
 
@@ -80,8 +76,7 @@ router.put('/routes/:id', async (req: Request, res: Response) => {
 
   const { host, upstreamPort, tls } = parsed.data;
 
-  const db = getDatabase();
-  await caddyService.saveSnapshot('Before modifying routes', db as unknown as Database);
+  await caddyService.saveSnapshot('Before modifying routes');
 
   await caddyService.updateRoute(id, host, upstreamPort, tls);
 
@@ -95,8 +90,7 @@ router.delete('/routes/:id', async (req: Request, res: Response) => {
     throw new ValidationError('id is required');
   }
 
-  const db = getDatabase();
-  await caddyService.saveSnapshot('Before deleting route', db as unknown as Database);
+  await caddyService.saveSnapshot('Before deleting route');
 
   await caddyService.removeRoute(id);
 
@@ -105,8 +99,7 @@ router.delete('/routes/:id', async (req: Request, res: Response) => {
 
 // GET /proxy/snapshots
 router.get('/snapshots', async (_req: Request, res: Response) => {
-  const db = getDatabase();
-  const snapshots = await caddyService.getSnapshots(db as unknown as Database);
+  const snapshots = await caddyService.getSnapshots();
   res.json({ data: { snapshots } });
 });
 
@@ -123,8 +116,7 @@ router.post('/rollback/:id', async (req: Request, res: Response) => {
     throw new ValidationError('id must be a valid integer');
   }
 
-  const db = getDatabase();
-  await caddyService.rollback(snapshotIdNum, db as unknown as Database);
+  await caddyService.rollback(snapshotIdNum);
 
   res.json({ data: { message: 'Rollback completed successfully' } });
 });

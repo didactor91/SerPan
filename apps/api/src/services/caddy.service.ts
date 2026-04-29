@@ -1,5 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-condition */
 import { apiLogger } from '../lib/logger.js';
+import { eq } from 'drizzle-orm';
+import { getDatabase, proxySnapshots } from '../db/schema.js';
+import type { ProxySnapshot } from '@serverctrl/shared';
 
 interface CaddyRoute {
   '@id': string;
@@ -35,21 +37,6 @@ interface TLSCertificate {
   notAfter: string;
   issuer: string;
   daysUntilExpiry: number;
-}
-
-interface ProxySnapshot {
-  id?: number;
-  config: string;
-  description?: string;
-  createdAt: string;
-}
-
-export interface Database {
-  prepare(sql: string): {
-    run(...args: unknown[]): void;
-    get(...args: unknown[]): unknown;
-    all(): ProxySnapshot[];
-  };
 }
 
 // ULID generation (simple implementation)
@@ -187,31 +174,41 @@ export class CaddyService {
     }
   }
 
-  async saveSnapshot(description: string, db: Database): Promise<number> {
+  async saveSnapshot(description: string): Promise<number> {
+    const db = getDatabase();
     const config = await this.getConfig();
     const configJson = JSON.stringify(config);
 
-    db.prepare('INSERT INTO proxy_snapshots (config, description) VALUES (?, ?)').run(
-      configJson,
-      description,
-    );
+    const result = db
+      .insert(proxySnapshots)
+      .values({
+        config: configJson,
+        description,
+      })
+      .run({ callers: [] });
 
-    db.prepare(
-      'DELETE FROM proxy_snapshots WHERE id NOT IN (SELECT id FROM proxy_snapshots ORDER BY id DESC LIMIT 10)',
-    ).run();
+    const id = result.lastInsertRowid as number;
 
-    const snapshot = db.prepare('SELECT last_insert_rowid() as id').get(0) as
-      | { id: number }
-      | undefined;
-    const id = snapshot?.id ?? 0;
+    // Keep only last 10 snapshots by deleting old ones
+    const allSnapshots = db.select().from(proxySnapshots).orderBy(proxySnapshots.id).all();
+    if (allSnapshots.length > 10) {
+      const snapshotsToDelete = allSnapshots.slice(0, allSnapshots.length - 10);
+      for (const s of snapshotsToDelete) {
+        db.delete(proxySnapshots).where(eq(proxySnapshots.id, s.id)).run();
+      }
+    }
+
     apiLogger.info('Snapshot saved', { description, id });
     return id;
   }
 
-  async rollback(snapshotId: number, db: Database): Promise<void> {
+  async rollback(snapshotId: number): Promise<void> {
+    const db = getDatabase();
     const snapshot = db
-      .prepare('SELECT config FROM proxy_snapshots WHERE id = ?')
-      .get(snapshotId) as { config: string } | undefined;
+      .select()
+      .from(proxySnapshots)
+      .where(eq(proxySnapshots.id, snapshotId))
+      .get();
 
     if (!snapshot) {
       throw new Error(`Snapshot ${String(snapshotId)} not found`);
@@ -230,8 +227,24 @@ export class CaddyService {
     apiLogger.info('Rollback completed', { snapshotId });
   }
 
-  async getSnapshots(db: Database): Promise<ProxySnapshot[]> {
-    return db.prepare('SELECT * FROM proxy_snapshots ORDER BY id DESC LIMIT 10').all();
+  async getSnapshots(): Promise<ProxySnapshot[]> {
+    const db = getDatabase();
+    const rows = db.select().from(proxySnapshots).orderBy(proxySnapshots.id).all();
+    return rows
+      .map((row) => {
+        const snapshot: ProxySnapshot = {
+          id: row.id,
+          proxyType: 'caddy',
+          config: row.config,
+          createdAt: row.createdAt,
+        };
+        if (row.description !== null) {
+          snapshot.description = row.description;
+        }
+        return snapshot;
+      })
+      .slice(0, 10)
+      .reverse();
   }
 
   async ensureRouteForProject(
@@ -260,30 +273,30 @@ export class CaddyService {
       }
     }
 
-    const byDomain = routes.find((r) => r.match[0]?.host?.[0] === domain);
-    if (byDomain) {
-      const reverseProxy = byDomain.handle.find((h) => h.handler === 'reverse_proxy');
-      const currentUpstream = reverseProxy?.upstreams?.[0]?.dial ?? '';
-      const newUpstream = `localhost:${String(upstreamPort)}`;
-
-      if (currentUpstream !== newUpstream) {
-        await this.updateRoute(byDomain['@id'], domain, upstreamPort);
-        apiLogger.info('Route updated (by domain match) via ensureRouteForProject', {
-          routeId: byDomain['@id'],
-          domain,
-          upstreamPort,
-        });
-      }
-      return byDomain['@id'];
+    const byDomain = routes.find((r) => r.match[0]?.host[0] === domain);
+    if (!byDomain) {
+      const newRouteId = await this.addRoute(domain, upstreamPort, true);
+      apiLogger.info('Route created via ensureRouteForProject', {
+        routeId: newRouteId,
+        domain,
+        upstreamPort,
+      });
+      return newRouteId;
     }
 
-    const newRouteId = await this.addRoute(domain, upstreamPort, true);
-    apiLogger.info('Route created via ensureRouteForProject', {
-      routeId: newRouteId,
-      domain,
-      upstreamPort,
-    });
-    return newRouteId;
+    const reverseProxy = byDomain.handle.find((h) => h.handler === 'reverse_proxy');
+    const currentUpstream = reverseProxy?.upstreams?.[0]?.dial ?? '';
+    const newUpstream = `localhost:${String(upstreamPort)}`;
+
+    if (currentUpstream !== newUpstream) {
+      await this.updateRoute(byDomain['@id'], domain, upstreamPort);
+      apiLogger.info('Route updated (by domain match) via ensureRouteForProject', {
+        routeId: byDomain['@id'],
+        domain,
+        upstreamPort,
+      });
+    }
+    return byDomain['@id'];
   }
 }
 

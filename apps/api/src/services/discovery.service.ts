@@ -1,4 +1,3 @@
-/* eslint-disable max-depth, @typescript-eslint/restrict-template-expressions, @typescript-eslint/no-unnecessary-condition, @typescript-eslint/no-unnecessary-type-assertion */
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { projectService } from './project.service.js';
@@ -15,58 +14,57 @@ export class DiscoveryService {
       try {
         const configs = this.scanForSerpanConfigs(dir);
         for (const configPath of configs) {
-          try {
-            const config = this.parseSerpanConfig(configPath);
-            if (config) {
-              // Check if project already exists by slug
-              const existingProject = projectService.getProjectBySlug(
-                this.slugify(config.serpan.name),
-              );
-              if (existingProject) {
-                // Skip already registered projects
-                continue;
-              }
-
-              const createData: {
-                name: string;
-                slug: string;
-                type: import('@serverctrl/shared').ProjectType;
-                path: string;
-                domain?: string;
-                healthCheckUrl?: string;
-                healthCheckPort?: number;
-              } = {
-                name: config.serpan.name,
-                slug: this.slugify(config.serpan.name),
-                type: config.serpan.type as ProjectType,
-                path: config.serpan.path,
-              };
-              if (config.serpan.proxy?.domain) {
-                createData.domain = config.serpan.proxy.domain;
-              }
-              if (config.serpan.healthCheck?.url) {
-                createData.healthCheckUrl = config.serpan.healthCheck.url;
-              }
-              if (config.serpan.healthCheck?.port !== undefined) {
-                createData.healthCheckPort = config.serpan.healthCheck.port;
-              }
-              const project = projectService.createProject(createData);
-
-              if (config.serpan.pm2?.name) {
-                projectService.linkToPM2(project, config.serpan.pm2.name);
-              }
-              discovered++;
-            }
-          } catch (e) {
-            errors.push(`Failed to register ${configPath}: ${e}`);
-          }
+          discovered += this.registerProjectFromConfig(configPath) ? 1 : 0;
         }
       } catch (e) {
-        errors.push(`Failed to scan ${dir}: ${e}`);
+        errors.push(`Failed to scan ${dir}: ${String(e)}`);
       }
     }
 
     return { discovered, errors };
+  }
+
+  private registerProjectFromConfig(configPath: string): boolean {
+    try {
+      const config = this.parseSerpanConfig(configPath);
+      if (!config) return false;
+
+      const existingProject = projectService.getProjectBySlug(this.slugify(config.serpan.name));
+      if (existingProject) return false;
+
+      const createData: {
+        name: string;
+        slug: string;
+        type: ProjectType;
+        path: string;
+        domain?: string;
+        healthCheckUrl?: string;
+        healthCheckPort?: number;
+      } = {
+        name: config.serpan.name,
+        slug: this.slugify(config.serpan.name),
+        type: config.serpan.type,
+        path: config.serpan.path,
+      };
+
+      if (config.serpan.proxy?.domain) {
+        createData.domain = config.serpan.proxy.domain;
+      }
+      if (config.serpan.healthCheck?.url) {
+        createData.healthCheckUrl = config.serpan.healthCheck.url;
+      }
+      if (config.serpan.healthCheck?.port !== undefined) {
+        createData.healthCheckPort = config.serpan.healthCheck.port;
+      }
+
+      const project = projectService.createProject(createData);
+      if (config.serpan.pm2?.name) {
+        projectService.linkToPM2(project, config.serpan.pm2.name);
+      }
+      return true;
+    } catch (e) {
+      throw new Error(`Failed to register ${configPath}: ${String(e)}`);
+    }
   }
 
   private scanForSerpanConfigs(dir: string, depth = 3): string[] {
@@ -102,13 +100,21 @@ export class DiscoveryService {
   parseSerpanConfig(configPath: string): SerpanConfig | null {
     try {
       const content = readFileSync(configPath, 'utf-8');
-      const config = JSON.parse(content) as SerpanConfig;
-
-      if (!config.serpan?.name || !config.serpan?.type || !config.serpan?.path) {
-        return null;
+      const parsed = JSON.parse(content) as unknown;
+      if (typeof parsed !== 'object' || parsed === null) return null;
+      const parsedObj = parsed as Record<string, unknown>;
+      if (!('serpan' in parsedObj)) return null;
+      const serpan = parsedObj.serpan;
+      if (typeof serpan !== 'object' || serpan === null) return null;
+      const serpanObj = serpan as Record<string, unknown>;
+      if (
+        typeof serpanObj.name === 'string' &&
+        typeof serpanObj.type === 'string' &&
+        typeof serpanObj.path === 'string'
+      ) {
+        return parsed as SerpanConfig;
       }
-
-      return config;
+      return null;
     } catch {
       return null;
     }

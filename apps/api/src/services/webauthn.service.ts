@@ -10,11 +10,12 @@ import type {
   RegistrationResponseJSON,
   AuthenticatorDevice,
 } from '@simplewebauthn/types';
+import { eq } from 'drizzle-orm';
 import { getEnv } from '../config/env.js';
-import { getDatabase } from '../db/schema.js';
+import { getDatabase, users, userPasskeys } from '../db/schema.js';
 import { authService } from './auth.service.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import type { User } from '@serverctrl/shared';
+import type { User, PasskeyInfo } from '@serverctrl/shared';
 
 interface ChallengeEntry {
   userId: number;
@@ -96,27 +97,31 @@ export class WebAuthnService {
 
     // Generate or get webauthn_user_id for this user
     const webauthnUserIdRow = db
-      .prepare('SELECT webauthn_user_id FROM users WHERE id = ?')
-      .get(user.id) as { webauthn_user_id: string | null } | undefined;
+      .select({ webauthnUserId: users.webauthnUserId })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .get();
 
     let webauthnUserIdValue: string;
-    if (!webauthnUserIdRow?.webauthn_user_id) {
+    if (!webauthnUserIdRow?.webauthnUserId) {
       webauthnUserIdValue = generateUUID();
-      db.prepare('UPDATE users SET webauthn_user_id = ? WHERE id = ?').run(
-        webauthnUserIdValue,
-        user.id,
-      );
+      db.update(users)
+        .set({ webauthnUserId: webauthnUserIdValue })
+        .where(eq(users.id, user.id))
+        .run();
     } else {
-      webauthnUserIdValue = webauthnUserIdRow.webauthn_user_id;
+      webauthnUserIdValue = webauthnUserIdRow.webauthnUserId;
     }
 
     // Get existing credentials to exclude (prevent duplicate)
     const existingPasskeys = db
-      .prepare('SELECT credential_id FROM user_passkeys WHERE user_id = ?')
-      .all(user.id) as { credential_id: string }[];
+      .select({ credentialId: userPasskeys.credentialId })
+      .from(userPasskeys)
+      .where(eq(userPasskeys.userId, user.id))
+      .all();
 
     const excludeCredentials = existingPasskeys.map((pk) => ({
-      id: base64URLStringToUint8Array(pk.credential_id),
+      id: base64URLStringToUint8Array(pk.credentialId),
       type: 'public-key' as const,
     }));
 
@@ -210,8 +215,10 @@ export class WebAuthnService {
 
     // Check if credential already exists
     const existing = db
-      .prepare('SELECT id FROM user_passkeys WHERE credential_id = ?')
-      .get(credentialId);
+      .select({ id: userPasskeys.id })
+      .from(userPasskeys)
+      .where(eq(userPasskeys.credentialId, credentialId))
+      .get();
 
     if (existing) {
       throw new ValidationError('Credential already registered');
@@ -219,25 +226,26 @@ export class WebAuthnService {
 
     // Get webauthn_user_id for the user
     const webauthnUserIdRow = db
-      .prepare('SELECT webauthn_user_id FROM users WHERE id = ?')
-      .get(userId) as { webauthn_user_id: string | null } | undefined;
+      .select({ webauthnUserId: users.webauthnUserId })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get();
 
-    if (!webauthnUserIdRow?.webauthn_user_id) {
+    if (!webauthnUserIdRow?.webauthnUserId) {
       const newUserId = generateUUID();
-      db.prepare('UPDATE users SET webauthn_user_id = ? WHERE id = ?').run(newUserId, userId);
+      db.update(users).set({ webauthnUserId: newUserId }).where(eq(users.id, userId)).run();
     }
 
-    db.prepare(
-      `INSERT INTO user_passkeys (user_id, credential_id, public_key, counter, device_type, device_name)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(
-      userId,
-      credentialId,
-      publicKey,
-      registrationInfo.counter,
-      registrationInfo.credentialDeviceType,
-      null,
-    );
+    db.insert(userPasskeys)
+      .values({
+        userId,
+        credentialId,
+        publicKey,
+        counter: registrationInfo.counter,
+        deviceType: registrationInfo.credentialDeviceType,
+        deviceName: null,
+      })
+      .run();
 
     return {
       credentialId,
@@ -260,15 +268,17 @@ export class WebAuthnService {
 
     // Get user's passkeys
     const passkeys = db
-      .prepare('SELECT credential_id FROM user_passkeys WHERE user_id = ?')
-      .all(userId) as { credential_id: string }[];
+      .select({ credentialId: userPasskeys.credentialId })
+      .from(userPasskeys)
+      .where(eq(userPasskeys.userId, userId))
+      .all();
 
     if (passkeys.length === 0) {
       throw new ValidationError('No passkeys registered for this user');
     }
 
     const allowCredentials = passkeys.map((pk) => ({
-      id: base64URLStringToUint8Array(pk.credential_id),
+      id: base64URLStringToUint8Array(pk.credentialId),
       type: 'public-key' as const,
     }));
 
@@ -305,26 +315,23 @@ export class WebAuthnService {
 
     // Get passkey from database
     const passkey = db
-      .prepare('SELECT * FROM user_passkeys WHERE credential_id = ? AND user_id = ?')
-      .get(response.id, userId) as
-      | {
-          id: number;
-          credential_id: string;
-          public_key: string;
-          counter: number;
-          device_type: string | null;
-          device_name: string | null;
-        }
-      | undefined;
+      .select()
+      .from(userPasskeys)
+      .where(eq(userPasskeys.credentialId, response.id))
+      .get();
 
-    if (!passkey) {
+    if (!passkey || passkey?.userId !== userId) {
       throw new NotFoundError('Passkey');
     }
 
     const latestChallenge = this.findChallengeForUser(userId);
     challengeStore.delete(latestChallenge);
 
-    const authenticator = this.buildAuthenticatorDevice(passkey);
+    const authenticator = this.buildAuthenticatorDevice({
+      credentialId: passkey.credentialId,
+      publicKey: passkey.publicKey,
+      counter: passkey.counter,
+    });
     const authenticationInfo = await this.verifyAuthentication(
       env,
       response,
@@ -334,12 +341,12 @@ export class WebAuthnService {
     this.validateCounter(authenticationInfo, passkey.counter);
 
     // Update counter in database
-    db.prepare('UPDATE user_passkeys SET counter = ? WHERE credential_id = ?').run(
-      authenticationInfo.newCounter,
-      response.id,
-    );
+    db.update(userPasskeys)
+      .set({ counter: authenticationInfo.newCounter })
+      .where(eq(userPasskeys.credentialId, response.id))
+      .run();
 
-    const user = this.getUserForToken(db, userId);
+    const user = this.getUserForToken(userId);
     const accessToken = authService.createAccessToken(user);
     const refreshToken = authService.createRefreshToken(user);
 
@@ -366,13 +373,13 @@ export class WebAuthnService {
   }
 
   private buildAuthenticatorDevice(passkey: {
-    credential_id: string;
-    public_key: string;
+    credentialId: string;
+    publicKey: string;
     counter: number;
   }): AuthenticatorDevice {
     return {
-      credentialPublicKey: base64URLStringToUint8Array(passkey.public_key),
-      credentialID: base64URLStringToUint8Array(passkey.credential_id),
+      credentialPublicKey: base64URLStringToUint8Array(passkey.publicKey),
+      credentialID: base64URLStringToUint8Array(passkey.credentialId),
       counter: passkey.counter,
     };
   }
@@ -406,16 +413,9 @@ export class WebAuthnService {
     }
   }
 
-  private getUserForToken(db: ReturnType<typeof getDatabase>, userId: number): User {
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as
-      | {
-          id: number;
-          username: string;
-          webauthn_user_id: string | null;
-          created_at: string;
-          last_login: string | null;
-        }
-      | undefined;
+  private getUserForToken(userId: number): User {
+    const db = getDatabase();
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
 
     if (!user) {
       throw new NotFoundError('User');
@@ -424,7 +424,7 @@ export class WebAuthnService {
     return {
       id: user.id,
       username: user.username,
-      createdAt: user.created_at,
+      createdAt: user.createdAt,
     };
   }
 
@@ -432,25 +432,26 @@ export class WebAuthnService {
     const db = getDatabase();
 
     const passkeys = db
-      .prepare(
-        `SELECT id, credential_id, device_type, device_name, created_at
-         FROM user_passkeys WHERE user_id = ? ORDER BY created_at DESC`,
-      )
-      .all(userId) as {
-      id: number;
-      credential_id: string;
-      device_type: string | null;
-      device_name: string | null;
-      created_at: string;
-    }[];
+      .select({
+        id: userPasskeys.id,
+        credentialId: userPasskeys.credentialId,
+        deviceType: userPasskeys.deviceType,
+        deviceName: userPasskeys.deviceName,
+        createdAt: userPasskeys.createdAt,
+      })
+      .from(userPasskeys)
+      .where(eq(userPasskeys.userId, userId))
+      .all();
 
-    return passkeys.map((pk) => ({
-      id: pk.id,
-      credentialId: maskCredentialId(pk.credential_id),
-      deviceType: pk.device_type,
-      deviceName: pk.device_name,
-      createdAt: pk.created_at,
-    }));
+    return passkeys
+      .map((pk) => ({
+        id: pk.id,
+        credentialId: maskCredentialId(pk.credentialId),
+        deviceType: pk.deviceType,
+        deviceName: pk.deviceName,
+        createdAt: pk.createdAt,
+      }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   async deletePasskey(userId: number, credentialId: string): Promise<void> {
@@ -458,27 +459,21 @@ export class WebAuthnService {
 
     // First check if the passkey exists and belongs to this user
     const passkey = db
-      .prepare('SELECT user_id FROM user_passkeys WHERE credential_id = ?')
-      .get(credentialId) as { user_id: number } | undefined;
+      .select({ userId: userPasskeys.userId })
+      .from(userPasskeys)
+      .where(eq(userPasskeys.credentialId, credentialId))
+      .get();
 
     if (!passkey) {
       throw new NotFoundError('Passkey');
     }
 
-    if (passkey.user_id !== userId) {
+    if (passkey.userId !== userId) {
       throw new ForbiddenError("Cannot delete another user's passkey");
     }
 
-    db.prepare('DELETE FROM user_passkeys WHERE credential_id = ?').run(credentialId);
+    db.delete(userPasskeys).where(eq(userPasskeys.credentialId, credentialId)).run();
   }
-}
-
-interface PasskeyInfo {
-  id: number;
-  credentialId: string;
-  deviceType: string | null;
-  deviceName: string | null;
-  createdAt: string;
 }
 
 function maskCredentialId(credentialId: string): string {

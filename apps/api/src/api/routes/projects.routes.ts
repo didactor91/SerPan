@@ -402,7 +402,7 @@ router.get('/:slug/logs', async (req: Request, res: Response) => {
 
   // Get instances for this project to find PM2 names
   const instances = projectService.getProjectInstances(project.id);
-  const pm2Names = instances.filter((i) => i.pm2Name).map((i) => i.pm2Name as string);
+  const pm2Names = instances.flatMap((i) => (i.pm2Name ? [i.pm2Name] : []));
 
   if (pm2Names.length === 0) {
     res.json({ data: { logs: [] } });
@@ -442,7 +442,7 @@ router.post('/:slug/restart', async (req: Request, res: Response) => {
   }
 
   const instances = projectService.getProjectInstances(project.id);
-  const pm2Names = instances.filter((i) => i.pm2Name).map((i) => i.pm2Name as string);
+  const pm2Names = instances.flatMap((i) => (i.pm2Name ? [i.pm2Name] : []));
 
   const results: { name: string; success: boolean; error?: string }[] = [];
   for (const name of pm2Names) {
@@ -488,11 +488,9 @@ router.get('/:slug/containers', async (req: Request, res: Response) => {
 router.get('/:slug/containers/:name/logs', async (req: Request, res: Response) => {
   const { slug, name } = req.params;
   if (!slug || !name) {
-    res
-      .status(400)
-      .json({
-        error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
-      });
+    res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
+    });
     return;
   }
 
@@ -513,11 +511,9 @@ router.get('/:slug/containers/:name/logs', async (req: Request, res: Response) =
 router.post('/:slug/containers/:name/start', async (req: Request, res: Response) => {
   const { slug, name } = req.params;
   if (!slug || !name) {
-    res
-      .status(400)
-      .json({
-        error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
-      });
+    res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
+    });
     return;
   }
 
@@ -533,15 +529,13 @@ router.post('/:slug/containers/:name/start', async (req: Request, res: Response)
   if (success) {
     res.json({ data: { message: `Container ${name} started` } });
   } else {
-    res
-      .status(500)
-      .json({
-        error: {
-          code: 'CONTAINER_START_FAILED',
-          message: `Failed to start container ${name}`,
-          statusCode: 500,
-        },
-      });
+    res.status(500).json({
+      error: {
+        code: 'CONTAINER_START_FAILED',
+        message: `Failed to start container ${name}`,
+        statusCode: 500,
+      },
+    });
   }
 });
 
@@ -549,11 +543,9 @@ router.post('/:slug/containers/:name/start', async (req: Request, res: Response)
 router.post('/:slug/containers/:name/stop', async (req: Request, res: Response) => {
   const { slug, name } = req.params;
   if (!slug || !name) {
-    res
-      .status(400)
-      .json({
-        error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
-      });
+    res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
+    });
     return;
   }
 
@@ -569,15 +561,13 @@ router.post('/:slug/containers/:name/stop', async (req: Request, res: Response) 
   if (success) {
     res.json({ data: { message: `Container ${name} stopped` } });
   } else {
-    res
-      .status(500)
-      .json({
-        error: {
-          code: 'CONTAINER_STOP_FAILED',
-          message: `Failed to stop container ${name}`,
-          statusCode: 500,
-        },
-      });
+    res.status(500).json({
+      error: {
+        code: 'CONTAINER_STOP_FAILED',
+        message: `Failed to stop container ${name}`,
+        statusCode: 500,
+      },
+    });
   }
 });
 
@@ -585,11 +575,9 @@ router.post('/:slug/containers/:name/stop', async (req: Request, res: Response) 
 router.post('/:slug/containers/:name/restart', async (req: Request, res: Response) => {
   const { slug, name } = req.params;
   if (!slug || !name) {
-    res
-      .status(400)
-      .json({
-        error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
-      });
+    res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'slug and name are required', statusCode: 400 },
+    });
     return;
   }
 
@@ -605,15 +593,13 @@ router.post('/:slug/containers/:name/restart', async (req: Request, res: Respons
   if (success) {
     res.json({ data: { message: `Container ${name} restarted` } });
   } else {
-    res
-      .status(500)
-      .json({
-        error: {
-          code: 'CONTAINER_RESTART_FAILED',
-          message: `Failed to restart container ${name}`,
-          statusCode: 500,
-        },
-      });
+    res.status(500).json({
+      error: {
+        code: 'CONTAINER_RESTART_FAILED',
+        message: `Failed to restart container ${name}`,
+        statusCode: 500,
+      },
+    });
   }
 });
 
@@ -637,7 +623,7 @@ router.get('/:slug/metrics', async (req: Request, res: Response) => {
 
   // Get both PM2 processes and Docker containers
   const instances = projectService.getProjectInstances(project.id);
-  const pm2Names = instances.filter((i) => i.pm2Name).map((i) => i.pm2Name as string);
+  const pm2Names = instances.flatMap((i) => (i.pm2Name ? [i.pm2Name] : []));
 
   // Get PM2 processes
   const allProcesses = await pm2Service.list();
@@ -700,7 +686,7 @@ router.post('/:slug/restart', async (req: Request, res: Response) => {
 
   // Restart PM2 processes
   const instances = projectService.getProjectInstances(project.id);
-  const pm2Names = instances.filter((i) => i.pm2Name).map((i) => i.pm2Name as string);
+  const pm2Names = instances.flatMap((i) => (i.pm2Name ? [i.pm2Name] : []));
 
   for (const name of pm2Names) {
     try {
