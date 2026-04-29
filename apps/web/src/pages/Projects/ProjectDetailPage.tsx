@@ -32,6 +32,12 @@ export function ProjectDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project', slug] }),
   });
 
+  const restartMutation = useMutation({
+    mutationFn: (instanceId: number) =>
+      apiClient.post(`/projects/${slug}/instances/${instanceId}/restart`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project', slug] }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => apiClient.delete(`/projects/${slug}`),
     onSuccess: () => {
@@ -137,13 +143,26 @@ export function ProjectDetailPage() {
                       <p className="text-xs text-muted-foreground">
                         {instance.pm2Name ? `PM2: ${instance.pm2Name}` : ''}
                         {instance.port ? `Port: ${instance.port}` : ''}
+                        {instance.pid ? ` PID: ${instance.pid}` : ''}
                       </p>
                     </div>
-                    {instance.containerStatus && (
-                      <Badge className={getStatusColor(instance.containerStatus)}>
-                        {instance.containerStatus}
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {instance.pm2Name && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => restartMutation.mutate(instance.id)}
+                          disabled={restartMutation.isPending}
+                        >
+                          {restartMutation.isPending ? 'Restarting...' : 'Restart'}
+                        </Button>
+                      )}
+                      {instance.containerStatus && (
+                        <Badge className={getStatusColor(instance.containerStatus)}>
+                          {instance.containerStatus}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

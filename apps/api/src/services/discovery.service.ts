@@ -18,6 +18,15 @@ export class DiscoveryService {
           try {
             const config = this.parseSerpanConfig(configPath);
             if (config) {
+              // Check if project already exists by slug
+              const existingProject = projectService.getProjectBySlug(
+                this.slugify(config.serpan.name),
+              );
+              if (existingProject) {
+                // Skip already registered projects
+                continue;
+              }
+
               const createData: {
                 name: string;
                 slug: string;

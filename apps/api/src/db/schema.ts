@@ -27,6 +27,9 @@ export function getDatabase(): Database.Database {
 }
 
 function initializeSchema(db: Database.Database): void {
+  // Run migrations first to ensure columns exist
+  runMigrations(db);
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -138,6 +141,85 @@ function initializeSchema(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_deploys_project_id ON project_deploys(project_id);
   `);
+}
+
+function runMigrations(db: Database.Database): void {
+  // Migration: Add missing columns to projects table
+  const columnsToAdd = [
+    { name: 'repo', type: 'TEXT' },
+    { name: 'branch', type: 'TEXT' },
+    { name: 'deploy_script', type: 'TEXT' },
+    {
+      name: 'deploy_status',
+      type: "TEXT DEFAULT 'idle' CHECK(deploy_status IN ('idle', 'deploying', 'success', 'failed'))",
+    },
+    { name: 'proxy_route_id', type: 'TEXT' },
+  ];
+
+  for (const col of columnsToAdd) {
+    try {
+      // Check if column exists
+      const result = db.prepare(`PRAGMA table_info(projects)`).all() as { name: string }[];
+      const exists = result.some((r) => r.name === col.name);
+      if (!exists) {
+        db.exec(`ALTER TABLE projects ADD COLUMN ${col.name} ${col.type}`);
+      }
+    } catch {
+      // Column might already exist or other issue - skip
+    }
+  }
+
+  // Migration: Add project_instances table if missing
+  try {
+    const instancesExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='project_instances'")
+      .get();
+    if (!instancesExists) {
+      db.exec(`
+        CREATE TABLE project_instances (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          server_name TEXT NOT NULL DEFAULT 'default',
+          server_host TEXT,
+          port INTEGER,
+          pid INTEGER,
+          pm2_name TEXT,
+          container_id TEXT,
+          container_status TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX idx_instances_project_id ON project_instances(project_id);
+      `);
+    }
+  } catch {
+    // Table might already exist
+  }
+
+  // Migration: Add project_deploys table if missing
+  try {
+    const deploysExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='project_deploys'")
+      .get();
+    if (!deploysExists) {
+      db.exec(`
+        CREATE TABLE project_deploys (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          branch TEXT NOT NULL,
+          commit_hash TEXT NOT NULL,
+          commit_message TEXT,
+          status TEXT NOT NULL CHECK(status IN ('idle', 'deploying', 'success', 'failed')),
+          output TEXT,
+          started_at TEXT NOT NULL DEFAULT (datetime('now')),
+          finished_at TEXT
+        );
+        CREATE INDEX idx_deploys_project_id ON project_deploys(project_id);
+      `);
+    }
+  } catch {
+    // Table might already exist
+  }
 }
 
 export function closeDatabase(): void {
