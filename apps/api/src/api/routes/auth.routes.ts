@@ -136,6 +136,95 @@ router.post('/logout', (_req: Request, res: Response) => {
   res.json({ data: { message: 'Logged out successfully' } });
 });
 
+// POST /auth/refresh
+router.post('/refresh', async (req: Request, res: Response) => {
+  const refreshToken = req.cookies.refreshToken as string | undefined;
+
+  if (!refreshToken) {
+    res.status(401).json({
+      error: {
+        code: 'AUTH_NO_REFRESH_TOKEN',
+        message: 'No refresh token provided',
+        statusCode: 401,
+      },
+    });
+    return;
+  }
+
+  try {
+    const payload = authService.verifyRefreshToken(refreshToken);
+
+    const db = getDatabase();
+    const user = db
+      .prepare('SELECT id, username, created_at, last_login FROM users WHERE id = ?')
+      .get(payload.userId) as
+      | {
+          id: number;
+          username: string;
+          created_at: string;
+          last_login?: string;
+        }
+      | undefined;
+
+    if (!user) {
+      res.status(401).json({
+        error: {
+          code: 'AUTH_USER_NOT_FOUND',
+          message: 'User not found',
+          statusCode: 401,
+        },
+      });
+      return;
+    }
+
+    const userForToken: import('@serverctrl/shared').User = {
+      id: user.id,
+      username: user.username,
+      createdAt: user.created_at,
+    };
+    if (user.last_login) {
+      userForToken.lastLogin = user.last_login;
+    }
+
+    const newAccessToken = authService.createAccessToken(userForToken);
+    const newRefreshToken = authService.createRefreshToken(userForToken);
+
+    // Set new cookies
+    res.cookie('accessToken', newAccessToken, {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 8 * 60 * 60 * 1000, // 8 hours
+    });
+
+    res.cookie('refreshToken', newRefreshToken, {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+
+    res.json({
+      data: {
+        user: {
+          id: user.id,
+          username: user.username,
+          createdAt: user.created_at,
+          lastLogin: user.last_login,
+        },
+      },
+    });
+  } catch {
+    res.status(401).json({
+      error: {
+        code: 'AUTH_INVALID_REFRESH_TOKEN',
+        message: 'Invalid or expired refresh token',
+        statusCode: 401,
+      },
+    });
+  }
+});
+
 // GET /auth/me
 router.get('/me', optionalAuth, (req: Request, res: Response) => {
   if (!req.user) {
