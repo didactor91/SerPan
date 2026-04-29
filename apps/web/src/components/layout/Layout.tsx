@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from '@tanstack/react-router';
 import { useAuthStore } from '@/stores/auth.store';
 import { useNotificationsStore } from '@/stores/notifications.store';
@@ -30,6 +31,25 @@ const navItems: NavItem[] = [
         <rect x="14" y="3" width="7" height="5" />
         <rect x="14" y="12" width="7" height="9" />
         <rect x="3" y="16" width="7" height="5" />
+      </svg>
+    ),
+  },
+  {
+    path: '/projects',
+    label: 'Projects',
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
       </svg>
     ),
   },
@@ -122,10 +142,17 @@ const navItems: NavItem[] = [
 ];
 
 export function Layout() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, checkAuth, isLoading } = useAuthStore();
   const { notifications } = useNotificationsStore();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Check auth on mount
+  useEffect(() => {
+    if (isLoading) {
+      void checkAuth();
+    }
+  }, [checkAuth, isLoading]);
 
   const handleLogout = () => {
     void logout().then(() => {
