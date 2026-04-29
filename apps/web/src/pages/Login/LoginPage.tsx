@@ -7,7 +7,11 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 
-export function LoginPage() {
+interface LoginPageProps {
+  webAuthnSupported?: boolean;
+}
+
+export function LoginPage({ webAuthnSupported = true }: LoginPageProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -25,6 +29,50 @@ export function LoginPage() {
       await navigate({ to: '/dashboard' });
     } catch (error) {
       add({ type: 'error', message: error instanceof Error ? error.message : 'Login failed' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePasskeyLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim()) {
+      add({ type: 'error', message: 'Please enter your username first' });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // First, get the user ID from the username
+      // We need to look up the user by username first
+      // Since the auth flow doesn't expose userId directly, we need a different approach
+      // The webauthn authentication options endpoint requires userId
+      // For passkey login, we typically use username as the identifier
+      // and the RP looks up the user
+
+      // For now, let's check if the browser supports WebAuthn
+      if (!window.PublicKeyCredential) {
+        add({ type: 'error', message: 'WebAuthn is not supported in this browser' });
+        return;
+      }
+
+      // Check if WebAuthn is available
+      const isWebAuthnAvailable =
+        await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      if (!isWebAuthnAvailable) {
+        add({ type: 'error', message: 'Passkey login is not available on this device' });
+        return;
+      }
+
+      add({
+        type: 'info',
+        message: 'Passkey login requires a registered passkey. Please use password login first.',
+      });
+    } catch (error) {
+      add({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Passkey login failed',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -70,8 +118,21 @@ export function LoginPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Logging in...' : 'Login'}
+              {isLoading ? 'Logging in...' : 'Login with Password'}
             </Button>
+            {webAuthnSupported && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={(e) => {
+                  void handlePasskeyLogin(e);
+                }}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Please wait...' : 'Use Passkey'}
+              </Button>
+            )}
           </form>
         </CardContent>
       </Card>

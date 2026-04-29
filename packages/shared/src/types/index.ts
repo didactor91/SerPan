@@ -117,3 +117,45 @@ export interface LogLine {
   timestamp: number;
   level: 'info' | 'warn' | 'error';
 }
+
+// WebAuthn types
+export interface PasskeyInfo {
+  id: number;
+  credentialId: string;
+  deviceType: string | null;
+  deviceName: string | null;
+  createdAt: string;
+}
+
+export interface WebAuthnRegistrationOptions {
+  timeout?: number;
+  challenge: string;
+  rp: {
+    name: string;
+    id: string;
+  };
+  user: {
+    name: string;
+    displayName: string;
+    id: string;
+  };
+  pubKeyCredParams: Array<{ type: 'public-key'; alg: number }>;
+  excludeCredentials?: Array<{ id: string; type: 'public-key' }>;
+  authenticatorSelection?: {
+    authenticatorAttachment?: 'platform' | 'cross-platform';
+    residentKey?: 'preferred' | 'required' | 'discouraged';
+    requireResidentKey?: boolean;
+    userVerification?: 'preferred' | 'required' | 'discouraged';
+  };
+  attestation?: 'none' | 'indirect' | 'direct';
+  extensions?: Record<string, unknown>;
+}
+
+export interface WebAuthnAuthenticationOptions {
+  timeout?: number;
+  challenge: string;
+  rpId: string;
+  allowCredentials?: Array<{ id: string; type: 'public-key' }>;
+  userVerification?: 'preferred' | 'required' | 'discouraged';
+  extensions?: Record<string, unknown>;
+}

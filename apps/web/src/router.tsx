@@ -7,6 +7,7 @@ import { LoginPage } from './pages/Login/LoginPage';
 import { ProxyManagerPage } from './pages/ProxyManager/ProxyManagerPage';
 import { LogViewerPage } from './pages/Logs/LogViewerPage';
 import { DomainsPage } from './pages/Domains/DomainsPage';
+import { SettingsPage } from './pages/Settings/SettingsPage';
 import { useAuthStore } from './stores/auth.store';
 
 // Auth route guard
@@ -85,6 +86,14 @@ const domainsRoute = createRoute({
   component: DomainsPage,
 });
 
+// Settings route
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  beforeLoad: authGuard,
+  component: SettingsPage,
+});
+
 // Build route tree
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -94,6 +103,7 @@ const routeTree = rootRoute.addChildren([
   proxyManagerRoute,
   logsRoute,
   domainsRoute,
+  settingsRoute,
 ]);
 
 // Create router

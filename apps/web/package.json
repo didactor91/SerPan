@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@serverctrl/shared": "workspace:*",
+    "@simplewebauthn/browser": "^9.0.0",
+    "@simplewebauthn/types": "^9.0.0",
     "@tanstack/react-query": "^5.26.0",
     "@tanstack/react-router": "^1.26.0",
     "clsx": "^2.1.0",
