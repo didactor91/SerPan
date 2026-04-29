@@ -1,3 +1,4 @@
+/* eslint-disable max-lines-per-function */
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -80,6 +81,62 @@ function initializeSchema(db: Database.Database): void {
       description TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      description TEXT,
+      type TEXT NOT NULL CHECK(type IN ('pm2', 'docker-compose', 'generic')),
+      path TEXT NOT NULL,
+      serpan_config_path TEXT,
+      repo TEXT,
+      branch TEXT,
+      deploy_script TEXT,
+      deploy_status TEXT DEFAULT 'idle' CHECK(deploy_status IN ('idle', 'deploying', 'success', 'failed')),
+      domain TEXT,
+      proxy_route_id TEXT,
+      health_check_url TEXT,
+      health_check_port INTEGER,
+      health_check_enabled INTEGER DEFAULT 1,
+      status TEXT DEFAULT 'unknown' CHECK(status IN ('running', 'stopped', 'error', 'unknown', 'deploying')),
+      last_health_check TEXT,
+      last_deploy TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS project_instances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      server_name TEXT NOT NULL DEFAULT 'default',
+      server_host TEXT,
+      port INTEGER,
+      pid INTEGER,
+      pm2_name TEXT,
+      container_id TEXT,
+      container_status TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_projects_slug ON projects(slug);
+    CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+    CREATE INDEX IF NOT EXISTS idx_instances_project_id ON project_instances(project_id);
+
+    CREATE TABLE IF NOT EXISTS project_deploys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      branch TEXT NOT NULL,
+      commit_hash TEXT NOT NULL,
+      commit_message TEXT,
+      status TEXT NOT NULL CHECK(status IN ('idle', 'deploying', 'success', 'failed')),
+      output TEXT,
+      started_at TEXT NOT NULL DEFAULT (datetime('now')),
+      finished_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_deploys_project_id ON project_deploys(project_id);
   `);
 }
 

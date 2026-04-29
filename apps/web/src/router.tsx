@@ -8,6 +8,8 @@ import { ProxyManagerPage } from './pages/ProxyManager/ProxyManagerPage';
 import { LogViewerPage } from './pages/Logs/LogViewerPage';
 import { DomainsPage } from './pages/Domains/DomainsPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
+import { ProjectsPage } from './pages/Projects/ProjectsPage';
+import { ProjectDetailPage } from './pages/Projects/ProjectDetailPage';
 import { useAuthStore } from './stores/auth.store';
 
 // Auth route guard
@@ -94,6 +96,21 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+// Projects routes
+const projectsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects',
+  beforeLoad: authGuard,
+  component: ProjectsPage,
+});
+
+const projectDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects/$slug',
+  beforeLoad: authGuard,
+  component: ProjectDetailPage,
+});
+
 // Build route tree
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -104,6 +121,8 @@ const routeTree = rootRoute.addChildren([
   logsRoute,
   domainsRoute,
   settingsRoute,
+  projectsRoute,
+  projectDetailRoute,
 ]);
 
 // Create router

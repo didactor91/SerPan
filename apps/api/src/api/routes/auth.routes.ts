@@ -2,6 +2,7 @@ import { Router, type Router as ExpressRouter } from 'express';
 import type { Request, Response } from 'express';
 import { authService } from '../../services/auth.service.js';
 import { getDatabase } from '../../db/schema.js';
+import { optionalAuth } from '../../middleware/auth.middleware.js';
 import {
   UnauthorizedError,
   ValidationError,
@@ -136,7 +137,7 @@ router.post('/logout', (_req: Request, res: Response) => {
 });
 
 // GET /auth/me
-router.get('/me', (req: Request, res: Response) => {
+router.get('/me', optionalAuth, (req: Request, res: Response) => {
   if (!req.user) {
     res.status(401).json({
       error: {

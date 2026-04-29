@@ -1,14 +1,76 @@
-// Project types
+export type ProjectType = 'pm2' | 'docker-compose' | 'generic';
+export type ProjectStatus = 'running' | 'stopped' | 'error' | 'unknown' | 'deploying';
+export type DeployStatus = 'idle' | 'deploying' | 'success' | 'failed';
+
 export interface Project {
-  id: string;
+  id: number;
   name: string;
-  domain: string;
+  slug: string;
   description?: string;
-  stack?: string[];
-  pm2Name?: string;
-  port?: number;
+  type: ProjectType;
+  path: string;
+  serpanConfigPath?: string;
+  repo?: string;
+  branch?: string;
+  deployScript?: string;
+  deployStatus: DeployStatus;
+  domain?: string;
+  proxyRouteId?: string;
+  healthCheckUrl?: string;
+  healthCheckPort?: number;
+  healthCheckEnabled: boolean;
+  status: ProjectStatus;
+  lastHealthCheck?: string;
+  lastDeploy?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectInstance {
+  id: number;
+  projectId: number;
+  serverName: string;
+  serverHost?: string;
+  port?: number;
+  pid?: number;
+  pm2Name?: string;
+  containerId?: string;
+  containerStatus?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectDeploy {
+  id: number;
+  projectId: number;
+  branch: string;
+  commitHash: string;
+  commitMessage: string;
+  status: DeployStatus;
+  output: string;
+  startedAt: string;
+  finishedAt?: string;
+}
+
+export interface SerpanConfig {
+  serpan: {
+    name: string;
+    type: ProjectType;
+    path: string;
+    healthCheck?: {
+      type: 'http';
+      url: string;
+      port?: number;
+    };
+    proxy?: {
+      domain: string;
+      internalPort: number;
+      tls?: boolean;
+    };
+    pm2?: {
+      name: string;
+    };
+  };
 }
 
 // PM2 Process types

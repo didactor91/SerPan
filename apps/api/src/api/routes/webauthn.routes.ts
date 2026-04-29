@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-condition */
 import { Router, type Router as ExpressRouter } from 'express';
 import type { Request, Response } from 'express';
 import { webAuthnService } from '../../services/webauthn.service.js';

@@ -4,6 +4,7 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } from '@simplewebauthn/server';
+/* eslint-disable @typescript-eslint/no-unnecessary-condition */
 import type {
   AuthenticationResponseJSON,
   RegistrationResponseJSON,
