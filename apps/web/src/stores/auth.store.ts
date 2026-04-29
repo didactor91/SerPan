@@ -61,6 +61,20 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
 
       if (!res.ok) {
+        // If unauthorized, try to refresh the token
+        if (res.status === 401) {
+          const refreshRes = await fetch('/api/v1/auth/refresh', {
+            method: 'POST',
+            credentials: 'include',
+          });
+
+          if (refreshRes.ok) {
+            const refreshData: AuthResponse = (await refreshRes.json()) as AuthResponse;
+            set({ user: refreshData.data.user, isAuthenticated: true, isLoading: false });
+            return true;
+          }
+        }
+
         set({ user: null, isAuthenticated: false, isLoading: false });
         return false;
       }
