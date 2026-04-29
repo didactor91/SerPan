@@ -203,4 +203,94 @@ describe('CaddyService', () => {
       expect(id2).toMatch(/^route_[A-Z0-9]{26}$/);
     });
   });
+
+  describe('ensureRouteForProject', () => {
+    it('should create new route when no existing route and no domain match', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            apps: { http: { servers: { srv0: { routes: [] } } } },
+          }),
+      });
+      mockFetch.mockResolvedValueOnce({ ok: true });
+
+      const routeId = await caddyService.ensureRouteForProject('newapp.com', 3001);
+
+      expect(routeId).toMatch(/^route_[A-Z0-9]+$/);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:2019/config/apps/http/servers/srv0/routes/',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should return existing routeId when route exists and upstream matches', async () => {
+      const existingRoute = {
+        '@id': 'route_existing',
+        match: [{ host: ['existing.com'] }],
+        handle: [{ handler: 'reverse_proxy', upstreams: [{ dial: 'localhost:3000' }] }],
+        terminal: true,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            apps: { http: { servers: { srv0: { routes: [existingRoute] } } } },
+          }),
+      });
+
+      const routeId = await caddyService.ensureRouteForProject(
+        'existing.com',
+        3000,
+        'route_existing',
+      );
+
+      expect(routeId).toBe('route_existing');
+    });
+
+    it('should update existing route when upstream port changed', async () => {
+      const existingRoute = {
+        '@id': 'route_update',
+        match: [{ host: ['update.com'] }],
+        handle: [{ handler: 'reverse_proxy', upstreams: [{ dial: 'localhost:3000' }] }],
+        terminal: true,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            apps: { http: { servers: { srv0: { routes: [existingRoute] } } } },
+          }),
+      });
+      mockFetch.mockResolvedValueOnce({ ok: true });
+      mockFetch.mockResolvedValueOnce({ ok: true });
+
+      const routeId = await caddyService.ensureRouteForProject('update.com', 4000, 'route_update');
+
+      expect(routeId).toBe('route_update');
+    });
+
+    it('should find route by domain even without routeId', async () => {
+      const existingRoute = {
+        '@id': 'route_by_domain',
+        match: [{ host: ['bydomain.com'] }],
+        handle: [{ handler: 'reverse_proxy', upstreams: [{ dial: 'localhost:3000' }] }],
+        terminal: true,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            apps: { http: { servers: { srv0: { routes: [existingRoute] } } } },
+          }),
+      });
+
+      const routeId = await caddyService.ensureRouteForProject('bydomain.com', 3000);
+
+      expect(routeId).toBe('route_by_domain');
+    });
+  });
 });

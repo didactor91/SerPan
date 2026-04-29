@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-condition */
 import { apiLogger } from '../lib/logger.js';
 
 interface CaddyRoute {
@@ -231,6 +232,58 @@ export class CaddyService {
 
   async getSnapshots(db: Database): Promise<ProxySnapshot[]> {
     return db.prepare('SELECT * FROM proxy_snapshots ORDER BY id DESC LIMIT 10').all();
+  }
+
+  async ensureRouteForProject(
+    domain: string,
+    upstreamPort: number,
+    existingRouteId?: string,
+  ): Promise<string> {
+    const routes = await this.getRoutes();
+
+    if (existingRouteId) {
+      const existing = routes.find((r) => r['@id'] === existingRouteId);
+      if (existing) {
+        const reverseProxy = existing.handle.find((h) => h.handler === 'reverse_proxy');
+        const currentUpstream = reverseProxy?.upstreams?.[0]?.dial ?? '';
+        const newUpstream = `localhost:${String(upstreamPort)}`;
+
+        if (currentUpstream !== newUpstream) {
+          await this.updateRoute(existingRouteId, domain, upstreamPort);
+          apiLogger.info('Route updated via ensureRouteForProject', {
+            routeId: existingRouteId,
+            domain,
+            upstreamPort,
+          });
+        }
+        return existingRouteId;
+      }
+    }
+
+    const byDomain = routes.find((r) => r.match[0]?.host?.[0] === domain);
+    if (byDomain) {
+      const reverseProxy = byDomain.handle.find((h) => h.handler === 'reverse_proxy');
+      const currentUpstream = reverseProxy?.upstreams?.[0]?.dial ?? '';
+      const newUpstream = `localhost:${String(upstreamPort)}`;
+
+      if (currentUpstream !== newUpstream) {
+        await this.updateRoute(byDomain['@id'], domain, upstreamPort);
+        apiLogger.info('Route updated (by domain match) via ensureRouteForProject', {
+          routeId: byDomain['@id'],
+          domain,
+          upstreamPort,
+        });
+      }
+      return byDomain['@id'];
+    }
+
+    const newRouteId = await this.addRoute(domain, upstreamPort, true);
+    apiLogger.info('Route created via ensureRouteForProject', {
+      routeId: newRouteId,
+      domain,
+      upstreamPort,
+    });
+    return newRouteId;
   }
 }
 

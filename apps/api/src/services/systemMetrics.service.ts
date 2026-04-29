@@ -14,19 +14,19 @@ export class SystemMetricsService {
 
     return {
       cpu: {
-        usage: Number(cpu),
+        usage: cpu,
       },
       memory: {
-        total: Number(mem.totalMemMb),
-        used: Number(mem.usedMemMb),
-        free: Number(mem.freeMemMb),
-        usagePercent: Number(mem.usedMemPercentage),
+        total: mem.totalMemMb,
+        used: mem.usedMemMb,
+        free: mem.freeMemMb,
+        usagePercent: mem.usedMemPercentage,
       },
       disk: {
-        total: Number(drive.totalGb),
-        used: Number(drive.usedGb),
-        free: Number(drive.freeGb),
-        usagePercent: Number(drive.usedPercentage),
+        total: drive.totalGb,
+        used: drive.usedGb,
+        free: drive.freeGb,
+        usagePercent: drive.usedPercentage,
       },
       timestamp: Date.now(),
     };

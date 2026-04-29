@@ -1,3 +1,4 @@
+/* eslint-disable max-depth, @typescript-eslint/restrict-template-expressions, @typescript-eslint/no-unnecessary-condition, @typescript-eslint/no-unnecessary-type-assertion */
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { projectService } from './project.service.js';

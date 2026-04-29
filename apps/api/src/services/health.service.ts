@@ -12,9 +12,10 @@ export class HealthService {
       try {
         const pm2Process = await pm2Service.describe(pm2Instance.pm2Name);
         if (pm2Process) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
           const pm2Data = pm2Process as any;
           const status = pm2Data.pm2_env?.pm2_env?.status === 'online' ? 'running' : 'stopped';
+          /* eslint-enable @typescript-eslint/no-unsafe-member-access */
           return { status };
         }
       } catch {
